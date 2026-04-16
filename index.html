@@ -157,7 +157,8 @@
 
     <div class="note">
       ・設定はこのブラウザに保存され、新しいタブでも引き継がれます。<br>
-      ・色の意味：白＝静か、黄＝注意、赤＝うるさい。
+      ・色の意味：白＝静か、黄＝注意、赤＝うるさい。<br>
+      ・赤になった後は、しばらく静かになるまで赤を維持します。
     </div>
   </div>
 
@@ -179,6 +180,10 @@
     triggerSec: 5
   };
 
+  // 赤になった後にすぐ白へ戻らないようにするための解除条件
+  const CLEAR_MARGIN_DB = 2.0; // noisyDb - 2dB を下回ったら静か判定候補
+  const CLEAR_SEC = 3;         // 3秒連続で静かなら解除
+
   let ctx = null;
   let analyser = null;
   let stream = null;
@@ -194,6 +199,7 @@
   const EPS = 1e-18;
 
   let noisyCount = 0;
+  let quietCount = 0;
   let noisyActive = false;
 
   // ===== ブザー機能（必要になったらコメントアウト解除） =====
@@ -270,7 +276,8 @@
   }
 
   function syncSettingsSummary(){
-    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤`;
+    const clearDb = getNoisyDb() - CLEAR_MARGIN_DB;
+    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤 / ${clearDb.toFixed(1)}未満が${CLEAR_SEC}秒続くと解除`;
   }
 
   function setVisualState(state, text){
@@ -281,6 +288,7 @@
 
   function resetJudgeState(){
     noisyCount = 0;
+    quietCount = 0;
     noisyActive = false;
     setVisualState('quiet', '静か');
     // stopAlarmSound();
@@ -303,28 +311,49 @@
   function updateJudgeState(db1s){
     const noisyDb = getNoisyDb();
     const triggerSec = getTriggerSec();
+    const clearDb = noisyDb - CLEAR_MARGIN_DB;
 
-    if (db1s >= noisyDb){
-      noisyCount += 1;
+    if (!noisyActive){
+      if (db1s >= noisyDb){
+        noisyCount += 1;
+      } else {
+        noisyCount = 0;
+      }
+
+      if (noisyCount >= triggerSec){
+        noisyActive = true;
+        quietCount = 0;
+        setVisualState('noisy', 'うるさい');
+        // startAlarmSound();
+        return;
+      }
+
+      if (noisyCount > 0){
+        const remain = triggerSec - noisyCount;
+        setVisualState('warning', `注意まで ${remain}秒`);
+      } else {
+        setVisualState('quiet', '静か');
+      }
+      return;
+    }
+
+    // うるさい状態になった後は、十分静かになるまで赤を維持
+    if (db1s < clearDb){
+      quietCount += 1;
     } else {
-      noisyCount = 0;
+      quietCount = 0;
+    }
+
+    if (quietCount >= CLEAR_SEC){
       noisyActive = false;
+      noisyCount = 0;
+      quietCount = 0;
       setVisualState('quiet', '静か');
       // stopAlarmSound();
       return;
     }
 
-    if (noisyCount >= triggerSec){
-      if (!noisyActive){
-        noisyActive = true;
-        // startAlarmSound();
-      }
-      setVisualState('noisy', 'うるさい');
-      return;
-    }
-
-    const remain = triggerSec - noisyCount;
-    setVisualState('warning', `注意まで ${remain}秒`);
+    setVisualState('noisy', 'うるさい');
   }
 
   function startLoop(){
