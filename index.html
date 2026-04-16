@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Noise Meter</title>
+  <style>
+    :root{
+      --bg: #f6f7f9;
+      --fg: #111;
+      --muted: #666;
+      --panel: rgba(255,255,255,0.86);
+      --border: rgba(0,0,0,0.08);
+      --button: #f1f3f5;
+    }
+
+    *{ box-sizing:border-box; }
+
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:var(--bg);
+      color:var(--fg);
+      transition: background-color 0.25s ease, color 0.25s ease;
+      padding:16px;
+    }
+
+    body.state-quiet{
+      --bg:#f6f7f9;
+      --fg:#111;
+      --muted:#666;
+      --panel:rgba(255,255,255,0.88);
+      --border:rgba(0,0,0,0.08);
+      --button:#f1f3f5;
+    }
+
+    body.state-warning{
+      --bg:#fff3cd;
+      --fg:#5c4500;
+      --muted:#856404;
+      --panel:rgba(255,255,255,0.84);
+      --border:rgba(133,100,4,0.18);
+      --button:#fff8e1;
+    }
+
+    body.state-noisy{
+      --bg:#f8d7da;
+      --fg:#6a1118;
+      --muted:#842029;
+      --panel:rgba(255,255,255,0.84);
+      --border:rgba(132,32,41,0.18);
+      --button:#fcebec;
+    }
+
+    .box{
+      width:min(560px, 100%);
+      text-align:center;
+      padding:24px 20px;
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:20px;
+      backdrop-filter: blur(10px);
+    }
+
+    #db{
+      font-size:80px;
+      font-weight:800;
+      letter-spacing:-0.03em;
+      line-height:1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #status{
+      margin-top:10px;
+      font-size:28px;
+      font-weight:700;
+    }
+
+    #sub{
+      margin-top:8px;
+      font-size:14px;
+      color:var(--muted);
+      line-height:1.6;
+    }
+
+    .controls{
+      margin-top:18px;
+      display:grid;
+      gap:12px;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:10px;
+      align-items:center;
+      text-align:left;
+    }
+
+    .row label{
+      font-size:14px;
+      color:var(--muted);
+    }
+
+    .row input{
+      width:110px;
+      padding:10px 12px;
+      font-size:16px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#fff;
+      color:#111;
+    }
+
+    button{
+      margin-top:6px;
+      padding:12px 18px;
+      font-size:16px;
+      font-weight:700;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:var(--button);
+      color:var(--fg);
+    }
+
+    .note{
+      margin-top:10px;
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.6;
+      text-align:left;
+    }
+  </style>
+</head>
+<body class="state-quiet">
+  <div class="box">
+    <div id="db">--</div>
+    <div id="status">待機中</div>
+    <div id="sub">dBFS（SLOW表示） / client only / GitHub Pages向け</div>
+
+    <div class="controls">
+      <div class="row">
+        <label for="noisyDbInput">うるさい基準（dBFS）</label>
+        <input id="noisyDbInput" type="number" step="0.1">
+      </div>
+      <div class="row">
+        <label for="triggerSecInput">判定秒数（連続）</label>
+        <input id="triggerSecInput" type="number" step="1" min="1">
+      </div>
+    </div>
+
+    <button id="btn" data-state="off">開始</button>
+
+    <div class="note">
+      ・設定はこのブラウザに保存され、新しいタブでも引き継がれます。<br>
+      ・色の意味：白＝静か、黄＝注意、赤＝うるさい。
+    </div>
+  </div>
+
+<script>
+  const dbEl = document.getElementById('db');
+  const statusEl = document.getElementById('status');
+  const subEl = document.getElementById('sub');
+  const btn = document.getElementById('btn');
+  const noisyDbInput = document.getElementById('noisyDbInput');
+  const triggerSecInput = document.getElementById('triggerSecInput');
+
+  const STORAGE_KEYS = {
+    noisyDb: 'noise_meter_noisy_db',
+    triggerSec: 'noise_meter_trigger_sec'
+  };
+
+  const DEFAULTS = {
+    noisyDb: -55.0,
+    triggerSec: 5
+  };
+
+  let ctx = null;
+  let analyser = null;
+  let stream = null;
+  let raf = null;
+
+  let winSumSq = 0;
+  let winN = 0;
+  let monitorTimer = null;
+
+  let slowPower = null;
+  let lastT = null;
+  const TAU_SLOW = 1.0;
+  const EPS = 1e-18;
+
+  let noisyCount = 0;
+  let noisyActive = false;
+
+  // ===== ブザー機能（必要になったらコメントアウト解除） =====
+  // let alarmOsc = null;
+  // let alarmGain = null;
+  // function startAlarmSound(){
+  //   if (!ctx || alarmOsc) return;
+  //   alarmGain = ctx.createGain();
+  //   alarmGain.gain.setValueAtTime(0.0, ctx.currentTime);
+  //   alarmGain.connect(ctx.destination);
+  //   alarmOsc = ctx.createOscillator();
+  //   alarmOsc.type = 'square';
+  //   alarmOsc.frequency.setValueAtTime(880, ctx.currentTime);
+  //   alarmOsc.connect(alarmGain);
+  //   alarmOsc.start();
+  //   alarmGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.05);
+  // }
+  // function stopAlarmSound(){
+  //   if (alarmGain && ctx){
+  //     try {
+  //       alarmGain.gain.cancelScheduledValues(ctx.currentTime);
+  //       alarmGain.gain.setValueAtTime(alarmGain.gain.value, ctx.currentTime);
+  //       alarmGain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 0.05);
+  //     } catch(_) {}
+  //   }
+  //   if (alarmOsc){
+  //     const osc = alarmOsc;
+  //     alarmOsc = null;
+  //     setTimeout(() => {
+  //       try { osc.stop(); } catch(_) {}
+  //       try { osc.disconnect(); } catch(_) {}
+  //     }, 80);
+  //   }
+  //   if (alarmGain){
+  //     const gain = alarmGain;
+  //     alarmGain = null;
+  //     setTimeout(() => {
+  //       try { gain.disconnect(); } catch(_) {}
+  //     }, 100);
+  //   }
+  // }
+
+  function isSecureOk(){
+    return location.protocol === 'https:' ||
+           location.hostname === 'localhost' ||
+           location.hostname === '127.0.0.1';
+  }
+
+  function loadNumber(key, fallback){
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    const num = Number(raw);
+    return Number.isFinite(num) ? num : fallback;
+  }
+
+  function saveSettings(){
+    localStorage.setItem(STORAGE_KEYS.noisyDb, String(getNoisyDb()));
+    localStorage.setItem(STORAGE_KEYS.triggerSec, String(getTriggerSec()));
+  }
+
+  function applySettingsToInputs(){
+    noisyDbInput.value = loadNumber(STORAGE_KEYS.noisyDb, DEFAULTS.noisyDb).toFixed(1);
+    triggerSecInput.value = String(loadNumber(STORAGE_KEYS.triggerSec, DEFAULTS.triggerSec));
+  }
+
+  function getNoisyDb(){
+    const v = Number(noisyDbInput.value);
+    return Number.isFinite(v) ? v : DEFAULTS.noisyDb;
+  }
+
+  function getTriggerSec(){
+    const v = Math.floor(Number(triggerSecInput.value));
+    return Number.isFinite(v) && v >= 1 ? v : DEFAULTS.triggerSec;
+  }
+
+  function syncSettingsSummary(){
+    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤`;
+  }
+
+  function setVisualState(state, text){
+    document.body.classList.remove('state-quiet', 'state-warning', 'state-noisy');
+    document.body.classList.add(`state-${state}`);
+    statusEl.textContent = text;
+  }
+
+  function resetJudgeState(){
+    noisyCount = 0;
+    noisyActive = false;
+    setVisualState('quiet', '静か');
+    // stopAlarmSound();
+  }
+
+  function calcPowerAndSumSq(floatData){
+    let mean = 0;
+    for (let i = 0; i < floatData.length; i++) mean += floatData[i];
+    mean /= floatData.length;
+
+    let sumSq = 0;
+    for (let i = 0; i < floatData.length; i++){
+      const v = floatData[i] - mean;
+      sumSq += v * v;
+    }
+    const power = sumSq / floatData.length;
+    return { power, sumSq, n: floatData.length };
+  }
+
+  function updateJudgeState(db1s){
+    const noisyDb = getNoisyDb();
+    const triggerSec = getTriggerSec();
+
+    if (db1s >= noisyDb){
+      noisyCount += 1;
+    } else {
+      noisyCount = 0;
+      noisyActive = false;
+      setVisualState('quiet', '静か');
+      // stopAlarmSound();
+      return;
+    }
+
+    if (noisyCount >= triggerSec){
+      if (!noisyActive){
+        noisyActive = true;
+        // startAlarmSound();
+      }
+      setVisualState('noisy', 'うるさい');
+      return;
+    }
+
+    const remain = triggerSec - noisyCount;
+    setVisualState('warning', `注意まで ${remain}秒`);
+  }
+
+  function startLoop(){
+    const buf = new Float32Array(analyser.fftSize);
+
+    const tick = (t) => {
+      if (!lastT) lastT = t;
+      const dt = Math.max(0, (t - lastT) / 1000);
+      lastT = t;
+
+      analyser.getFloatTimeDomainData(buf);
+      const { power, sumSq, n } = calcPowerAndSumSq(buf);
+
+      if (slowPower === null) slowPower = power;
+      const alpha = 1 - Math.exp(-dt / TAU_SLOW);
+      slowPower = (1 - alpha) * slowPower + alpha * power;
+
+      const dbSlow = 10 * Math.log10(slowPower + EPS);
+      dbEl.textContent = dbSlow.toFixed(1);
+
+      winSumSq += sumSq;
+      winN += n;
+
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+  }
+
+  function startMonitor(){
+    stopMonitor();
+    monitorTimer = setInterval(() => {
+      if (winN > 0){
+        const power1s = winSumSq / winN;
+        const db1s = 10 * Math.log10(power1s + EPS);
+        updateJudgeState(db1s);
+      }
+      winSumSq = 0;
+      winN = 0;
+    }, 1000);
+  }
+
+  function stopMonitor(){
+    if (monitorTimer){
+      clearInterval(monitorTimer);
+      monitorTimer = null;
+    }
+    winSumSq = 0;
+    winN = 0;
+  }
+
+  async function start(){
+    if (!isSecureOk()){
+      alert('HTTPSで開く必要があります');
+      return;
+    }
+
+    btn.disabled = true;
+
+    try{
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      await ctx.resume();
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
+
+      const src = ctx.createMediaStreamSource(stream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      src.connect(analyser);
+
+      resetJudgeState();
+      startLoop();
+      startMonitor();
+
+      btn.textContent = '停止';
+      btn.dataset.state = 'on';
+      btn.disabled = false;
+    }catch(e){
+      alert('エラー: ' + (e?.message || e));
+      await stop();
+      btn.disabled = false;
+    }
+  }
+
+  async function stop(){
+    btn.disabled = true;
+
+    if (raf) cancelAnimationFrame(raf);
+    raf = null;
+
+    stopMonitor();
+
+    try { stream?.getTracks().forEach(t => t.stop()); } catch(_) {}
+    stream = null;
+
+    resetJudgeState();
+
+    try { await ctx?.close(); } catch(_) {}
+    ctx = null;
+    analyser = null;
+
+    slowPower = null;
+    lastT = null;
+
+    dbEl.textContent = '--';
+    syncSettingsSummary();
+    setVisualState('quiet', '待機中');
+
+    btn.textContent = '開始';
+    btn.dataset.state = 'off';
+    btn.disabled = false;
+  }
+
+  noisyDbInput.addEventListener('input', () => {
+    saveSettings();
+    syncSettingsSummary();
+    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
+  });
+
+  triggerSecInput.addEventListener('input', () => {
+    saveSettings();
+    syncSettingsSummary();
+    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
+  });
+
+  window.addEventListener('storage', (event) => {
+    if (event.key === STORAGE_KEYS.noisyDb || event.key === STORAGE_KEYS.triggerSec){
+      applySettingsToInputs();
+      syncSettingsSummary();
+    }
+  });
+
+  btn.addEventListener('click', async () => {
+    if (btn.dataset.state === 'on') await stop();
+    else await start();
+  });
+
+  applySettingsToInputs();
+  syncSettingsSummary();
+  setVisualState('quiet', '待機中');
+</script>
+</body>
+</html>
