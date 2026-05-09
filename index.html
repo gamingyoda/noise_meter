@@ -202,45 +202,45 @@
   let quietCount = 0;
   let noisyActive = false;
 
-  // ===== ブザー機能（必要になったらコメントアウト解除） =====
-  // let alarmOsc = null;
-  // let alarmGain = null;
-  // function startAlarmSound(){
-  //   if (!ctx || alarmOsc) return;
-  //   alarmGain = ctx.createGain();
-  //   alarmGain.gain.setValueAtTime(0.0, ctx.currentTime);
-  //   alarmGain.connect(ctx.destination);
-  //   alarmOsc = ctx.createOscillator();
-  //   alarmOsc.type = 'square';
-  //   alarmOsc.frequency.setValueAtTime(880, ctx.currentTime);
-  //   alarmOsc.connect(alarmGain);
-  //   alarmOsc.start();
-  //   alarmGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.05);
-  // }
-  // function stopAlarmSound(){
-  //   if (alarmGain && ctx){
-  //     try {
-  //       alarmGain.gain.cancelScheduledValues(ctx.currentTime);
-  //       alarmGain.gain.setValueAtTime(alarmGain.gain.value, ctx.currentTime);
-  //       alarmGain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 0.05);
-  //     } catch(_) {}
-  //   }
-  //   if (alarmOsc){
-  //     const osc = alarmOsc;
-  //     alarmOsc = null;
-  //     setTimeout(() => {
-  //       try { osc.stop(); } catch(_) {}
-  //       try { osc.disconnect(); } catch(_) {}
-  //     }, 80);
-  //   }
-  //   if (alarmGain){
-  //     const gain = alarmGain;
-  //     alarmGain = null;
-  //     setTimeout(() => {
-  //       try { gain.disconnect(); } catch(_) {}
-  //     }, 100);
-  //   }
-  // }
+  ===== ブザー機能（必要になったらコメントアウト解除） =====
+  let alarmOsc = null;
+  let alarmGain = null;
+  function startAlarmSound(){
+    if (!ctx || alarmOsc) return;
+    alarmGain = ctx.createGain();
+    alarmGain.gain.setValueAtTime(0.0, ctx.currentTime);
+    alarmGain.connect(ctx.destination);
+    alarmOsc = ctx.createOscillator();
+    alarmOsc.type = 'square';
+    alarmOsc.frequency.setValueAtTime(880, ctx.currentTime);
+    alarmOsc.connect(alarmGain);
+    alarmOsc.start();
+    alarmGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.05);
+  }
+  function stopAlarmSound(){
+    if (alarmGain && ctx){
+      try {
+        alarmGain.gain.cancelScheduledValues(ctx.currentTime);
+        alarmGain.gain.setValueAtTime(alarmGain.gain.value, ctx.currentTime);
+        alarmGain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 0.05);
+      } catch(_) {}
+    }
+    if (alarmOsc){
+      const osc = alarmOsc;
+      alarmOsc = null;
+      setTimeout(() => {
+        try { osc.stop(); } catch(_) {}
+        try { osc.disconnect(); } catch(_) {}
+      }, 80);
+    }
+    if (alarmGain){
+      const gain = alarmGain;
+      alarmGain = null;
+      setTimeout(() => {
+        try { gain.disconnect(); } catch(_) {}
+      }, 100);
+    }
+  }
 
   function isSecureOk(){
     return location.protocol === 'https:' ||
@@ -324,7 +324,7 @@
         noisyActive = true;
         quietCount = 0;
         setVisualState('noisy', 'うるさい');
-        // startAlarmSound();
+        startAlarmSound();
         return;
       }
 
@@ -349,7 +349,7 @@
       noisyCount = 0;
       quietCount = 0;
       setVisualState('quiet', '静か');
-      // stopAlarmSound();
+      stopAlarmSound();
       return;
     }
 
