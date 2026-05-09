@@ -239,45 +239,11 @@
   let speechPrimed = false;
   let lastSpeechAt = 0;
 
-  // ===== 読み上げ前アラート音の旧サンプル（参考用・無効） =====
-  // 下に、今回採用した playPreAlertBeep() を有効な関数として追加しています。
-  //
-  // function playPreAlertBeep(){
-  //   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  //   if (!AudioContextClass) return;
-  //
-  //   const audioCtx = ctx || new AudioContextClass();
-  //   try { audioCtx.resume?.(); } catch(_) {}
-  //
-  //   const osc = audioCtx.createOscillator();
-  //   const gain = audioCtx.createGain();
-  //
-  //   // Web Audioのゲインは大きくしすぎると音割れするため、まずは0.7程度にしています。
-  //   // さらに強くしたい場合は 0.9〜1.0 まで上げてください。
-  //   gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-  //   gain.gain.exponentialRampToValueAtTime(0.7, audioCtx.currentTime + 0.02);
-  //   gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.18);
-  //
-  //   osc.type = 'square';
-  //   osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-  //   osc.connect(gain);
-  //   gain.connect(audioCtx.destination);
-  //
-  //   osc.start(audioCtx.currentTime);
-  //   osc.stop(audioCtx.currentTime + 0.2);
-  //
-  //   setTimeout(() => {
-  //     try { osc.disconnect(); } catch(_) {}
-  //     try { gain.disconnect(); } catch(_) {}
-  //     if (!ctx) { try { audioCtx.close(); } catch(_) {} }
-  //   }, 300);
-  // }
-
   function playPreAlertBeep(){
     if (!ctx) return 0;
 
     const audioCtx = ctx;
-    const duration = 2.0;
+    const duration = 1.0;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
 
@@ -316,46 +282,6 @@
     // 読み上げをアラート音の後に始めるため、秒数を返す
     return duration;
   }
-
-  // ===== ブザー機能（必要になったらコメントアウト解除） =====
-  // let alarmOsc = null;
-  // let alarmGain = null;
-  // function startAlarmSound(){
-  //   if (!ctx || alarmOsc) return;
-  //   alarmGain = ctx.createGain();
-  //   alarmGain.gain.setValueAtTime(0.0, ctx.currentTime);
-  //   alarmGain.connect(ctx.destination);
-  //   alarmOsc = ctx.createOscillator();
-  //   alarmOsc.type = 'square';
-  //   alarmOsc.frequency.setValueAtTime(880, ctx.currentTime);
-  //   alarmOsc.connect(alarmGain);
-  //   alarmOsc.start();
-  //   alarmGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.05);
-  // }
-  // function stopAlarmSound(){
-  //   if (alarmGain && ctx){
-  //     try {
-  //       alarmGain.gain.cancelScheduledValues(ctx.currentTime);
-  //       alarmGain.gain.setValueAtTime(alarmGain.gain.value, ctx.currentTime);
-  //       alarmGain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 0.05);
-  //     } catch(_) {}
-  //   }
-  //   if (alarmOsc){
-  //     const osc = alarmOsc;
-  //     alarmOsc = null;
-  //     setTimeout(() => {
-  //       try { osc.stop(); } catch(_) {}
-  //       try { osc.disconnect(); } catch(_) {}
-  //     }, 80);
-  //   }
-  //   if (alarmGain){
-  //     const gain = alarmGain;
-  //     alarmGain = null;
-  //     setTimeout(() => {
-  //       try { gain.disconnect(); } catch(_) {}
-  //     }, 100);
-  //   }
-  // }
 
   function speechSupported(){
     return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
