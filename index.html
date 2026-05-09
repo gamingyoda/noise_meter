@@ -247,34 +247,33 @@
   // してください。
   //
   function playPreAlertBeep(){
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
+    if (!ctx) return;
   
-    const audioCtx = ctx || new AudioContextClass();
-    try { audioCtx.resume?.(); } catch(_) {}
+    const audioCtx = ctx;
+    const duration = 2.0; // ← ここを変える。2秒なら 2.0
   
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
   
-    // Web Audioのゲインは大きくしすぎると音割れするため、まずは0.7程度にしています。
-    // さらに強くしたい場合は 0.9〜1.0 まで上げてください。
-    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.7, audioCtx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.18);
-  
     osc.type = 'square';
-    osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+    osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+  
+    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.35, audioCtx.currentTime + 0.05);
+  
+    // 終了直前に少しだけフェードアウト
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+  
     osc.connect(gain);
     gain.connect(audioCtx.destination);
   
     osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + 0.2);
+    osc.stop(audioCtx.currentTime + duration);
   
     setTimeout(() => {
       try { osc.disconnect(); } catch(_) {}
       try { gain.disconnect(); } catch(_) {}
-      if (!ctx) { try { audioCtx.close(); } catch(_) {} }
-    }, 300);
+    }, (duration + 0.2) * 1000);
   }
 
   // ===== ブザー機能（必要になったらコメントアウト解除） =====
