@@ -93,6 +93,19 @@
       gap:12px;
     }
 
+    .buttons{
+      margin-top:6px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+
+    @media (max-width: 420px){
+      .buttons{ grid-template-columns: 1fr; }
+      #db{ font-size:68px; }
+      #status{ font-size:24px; }
+    }
+
     .row{
       display:grid;
       grid-template-columns: 1fr auto;
@@ -151,13 +164,22 @@
         <label for="triggerSecInput">判定秒数（連続）</label>
         <input id="triggerSecInput" type="number" step="1" min="1">
       </div>
+      <div class="row">
+        <label for="speechCooldownInput">読み上げ間隔（秒）</label>
+        <input id="speechCooldownInput" type="number" step="1" min="5">
+      </div>
     </div>
 
-    <button id="btn" data-state="off">開始</button>
+    <div class="buttons">
+      <button id="btn" data-state="off">開始</button>
+      <button id="testSpeechBtn" type="button">音声テスト</button>
+    </div>
 
     <div class="note">
       ・設定はこのブラウザに保存され、新しいタブでも引き継がれます。<br>
       ・色の意味：白＝静か、黄＝注意、赤＝うるさい。<br>
+      ・赤になったら音声で注意文を読み上げます。<br>
+      ・iPadで音が出ない場合は、開始後に「音声テスト」を1回押してください。<br>
       ・赤になった後は、しばらく静かになるまで赤を維持します。
     </div>
   </div>
@@ -167,18 +189,24 @@
   const statusEl = document.getElementById('status');
   const subEl = document.getElementById('sub');
   const btn = document.getElementById('btn');
+  const testSpeechBtn = document.getElementById('testSpeechBtn');
   const noisyDbInput = document.getElementById('noisyDbInput');
   const triggerSecInput = document.getElementById('triggerSecInput');
+  const speechCooldownInput = document.getElementById('speechCooldownInput');
 
   const STORAGE_KEYS = {
     noisyDb: 'noise_meter_noisy_db',
-    triggerSec: 'noise_meter_trigger_sec'
+    triggerSec: 'noise_meter_trigger_sec',
+    speechCooldownSec: 'noise_meter_speech_cooldown_sec'
   };
 
   const DEFAULTS = {
     noisyDb: -55.0,
-    triggerSec: 5
+    triggerSec: 5,
+    speechCooldownSec: 25
   };
+
+  const SPEECH_TEXT = 'リフレッシュコーナーをご利用の方へ。勉強している子の迷惑になります。小声で話してください。';
 
   // 赤になった後にすぐ白へ戻らないようにするための解除条件
   const CLEAR_MARGIN_DB = 2.0; // noisyDb - 2dB を下回ったら静か判定候補
@@ -202,44 +230,117 @@
   let quietCount = 0;
   let noisyActive = false;
 
-  ===== ブザー機能（必要になったらコメントアウト解除） =====
-  let alarmOsc = null;
-  let alarmGain = null;
-  function startAlarmSound(){
-    if (!ctx || alarmOsc) return;
-    alarmGain = ctx.createGain();
-    alarmGain.gain.setValueAtTime(0.0, ctx.currentTime);
-    alarmGain.connect(ctx.destination);
-    alarmOsc = ctx.createOscillator();
-    alarmOsc.type = 'square';
-    alarmOsc.frequency.setValueAtTime(880, ctx.currentTime);
-    alarmOsc.connect(alarmGain);
-    alarmOsc.start();
-    alarmGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.05);
+  let speechPrimed = false;
+  let lastSpeechAt = 0;
+
+  // ===== ブザー機能（必要になったらコメントアウト解除） =====
+  // let alarmOsc = null;
+  // let alarmGain = null;
+  // function startAlarmSound(){
+  //   if (!ctx || alarmOsc) return;
+  //   alarmGain = ctx.createGain();
+  //   alarmGain.gain.setValueAtTime(0.0, ctx.currentTime);
+  //   alarmGain.connect(ctx.destination);
+  //   alarmOsc = ctx.createOscillator();
+  //   alarmOsc.type = 'square';
+  //   alarmOsc.frequency.setValueAtTime(880, ctx.currentTime);
+  //   alarmOsc.connect(alarmGain);
+  //   alarmOsc.start();
+  //   alarmGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.05);
+  // }
+  // function stopAlarmSound(){
+  //   if (alarmGain && ctx){
+  //     try {
+  //       alarmGain.gain.cancelScheduledValues(ctx.currentTime);
+  //       alarmGain.gain.setValueAtTime(alarmGain.gain.value, ctx.currentTime);
+  //       alarmGain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 0.05);
+  //     } catch(_) {}
+  //   }
+  //   if (alarmOsc){
+  //     const osc = alarmOsc;
+  //     alarmOsc = null;
+  //     setTimeout(() => {
+  //       try { osc.stop(); } catch(_) {}
+  //       try { osc.disconnect(); } catch(_) {}
+  //     }, 80);
+  //   }
+  //   if (alarmGain){
+  //     const gain = alarmGain;
+  //     alarmGain = null;
+  //     setTimeout(() => {
+  //       try { gain.disconnect(); } catch(_) {}
+  //     }, 100);
+  //   }
+  // }
+
+  function speechSupported(){
+    return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
   }
-  function stopAlarmSound(){
-    if (alarmGain && ctx){
-      try {
-        alarmGain.gain.cancelScheduledValues(ctx.currentTime);
-        alarmGain.gain.setValueAtTime(alarmGain.gain.value, ctx.currentTime);
-        alarmGain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 0.05);
-      } catch(_) {}
+
+  function getJapaneseVoice(){
+    if (!speechSupported()) return null;
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find(v => v.lang === 'ja-JP') ||
+           voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ja')) ||
+           null;
+  }
+
+  function createUtterance(text, volume = 1.0){
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP';
+    u.rate = 0.95;
+    u.pitch = 1.0;
+    u.volume = volume;
+
+    const voice = getJapaneseVoice();
+    if (voice) u.voice = voice;
+
+    return u;
+  }
+
+  // iPad Safari対策：開始ボタンのタップ中に一度だけ音声APIへ触れておく
+  function primeSpeech(){
+    if (!speechSupported() || speechPrimed) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = createUtterance(' ', 0.0);
+      window.speechSynthesis.speak(u);
+      speechPrimed = true;
+    } catch(e) {
+      console.warn('speech prime failed:', e);
     }
-    if (alarmOsc){
-      const osc = alarmOsc;
-      alarmOsc = null;
-      setTimeout(() => {
-        try { osc.stop(); } catch(_) {}
-        try { osc.disconnect(); } catch(_) {}
-      }, 80);
+  }
+
+  function stopSpeech(){
+    if (!speechSupported()) return;
+    try { window.speechSynthesis.cancel(); } catch(_) {}
+  }
+
+  function speakWarning(force = false){
+    if (!speechSupported()) {
+      if (force) alert('このブラウザは音声読み上げに対応していません。');
+      return;
     }
-    if (alarmGain){
-      const gain = alarmGain;
-      alarmGain = null;
-      setTimeout(() => {
-        try { gain.disconnect(); } catch(_) {}
-      }, 100);
+
+    const now = Date.now();
+    const cooldownMs = getSpeechCooldownSec() * 1000;
+    if (!force && now - lastSpeechAt < cooldownMs) return;
+
+    try {
+      window.speechSynthesis.cancel();
+      const u = createUtterance(SPEECH_TEXT, 1.0);
+      u.onerror = (e) => console.warn('speech error:', e);
+      window.speechSynthesis.speak(u);
+      if (!force) lastSpeechAt = now;
+    } catch(e) {
+      console.warn('speech failed:', e);
     }
+  }
+
+  if (speechSupported()){
+    // Safariでは音声リストが遅れて入ることがあるため、変更時にも取得しておく
+    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.getVoices();
   }
 
   function isSecureOk(){
@@ -258,11 +359,13 @@
   function saveSettings(){
     localStorage.setItem(STORAGE_KEYS.noisyDb, String(getNoisyDb()));
     localStorage.setItem(STORAGE_KEYS.triggerSec, String(getTriggerSec()));
+    localStorage.setItem(STORAGE_KEYS.speechCooldownSec, String(getSpeechCooldownSec()));
   }
 
   function applySettingsToInputs(){
     noisyDbInput.value = loadNumber(STORAGE_KEYS.noisyDb, DEFAULTS.noisyDb).toFixed(1);
     triggerSecInput.value = String(loadNumber(STORAGE_KEYS.triggerSec, DEFAULTS.triggerSec));
+    speechCooldownInput.value = String(loadNumber(STORAGE_KEYS.speechCooldownSec, DEFAULTS.speechCooldownSec));
   }
 
   function getNoisyDb(){
@@ -275,9 +378,14 @@
     return Number.isFinite(v) && v >= 1 ? v : DEFAULTS.triggerSec;
   }
 
+  function getSpeechCooldownSec(){
+    const v = Math.floor(Number(speechCooldownInput.value));
+    return Number.isFinite(v) && v >= 5 ? v : DEFAULTS.speechCooldownSec;
+  }
+
   function syncSettingsSummary(){
     const clearDb = getNoisyDb() - CLEAR_MARGIN_DB;
-    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤 / ${clearDb.toFixed(1)}未満が${CLEAR_SEC}秒続くと解除`;
+    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤 / 読み上げ間隔 ${getSpeechCooldownSec()}秒 / ${clearDb.toFixed(1)}未満が${CLEAR_SEC}秒続くと解除`;
   }
 
   function setVisualState(state, text){
@@ -324,7 +432,8 @@
         noisyActive = true;
         quietCount = 0;
         setVisualState('noisy', 'うるさい');
-        startAlarmSound();
+        speakWarning(false);
+        // startAlarmSound();
         return;
       }
 
@@ -349,11 +458,12 @@
       noisyCount = 0;
       quietCount = 0;
       setVisualState('quiet', '静か');
-      stopAlarmSound();
+      // stopAlarmSound();
       return;
     }
 
     setVisualState('noisy', 'うるさい');
+    speakWarning(false);
   }
 
   function startLoop(){
@@ -414,6 +524,8 @@
     btn.disabled = true;
 
     try{
+      primeSpeech();
+
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       await ctx.resume();
 
@@ -456,6 +568,7 @@
     stream = null;
 
     resetJudgeState();
+    stopSpeech();
 
     try { await ctx?.close(); } catch(_) {}
     ctx = null;
@@ -463,6 +576,7 @@
 
     slowPower = null;
     lastT = null;
+    lastSpeechAt = 0;
 
     dbEl.textContent = '--';
     syncSettingsSummary();
@@ -485,8 +599,16 @@
     if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
   });
 
+  speechCooldownInput.addEventListener('input', () => {
+    saveSettings();
+    syncSettingsSummary();
+    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
+  });
+
   window.addEventListener('storage', (event) => {
-    if (event.key === STORAGE_KEYS.noisyDb || event.key === STORAGE_KEYS.triggerSec){
+    if (event.key === STORAGE_KEYS.noisyDb ||
+        event.key === STORAGE_KEYS.triggerSec ||
+        event.key === STORAGE_KEYS.speechCooldownSec){
       applySettingsToInputs();
       syncSettingsSummary();
     }
@@ -495,6 +617,11 @@
   btn.addEventListener('click', async () => {
     if (btn.dataset.state === 'on') await stop();
     else await start();
+  });
+
+  testSpeechBtn.addEventListener('click', () => {
+    primeSpeech();
+    speakWarning(true);
   });
 
   applySettingsToInputs();
