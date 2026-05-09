@@ -178,8 +178,7 @@
     <div class="note">
       ・設定はこのブラウザに保存され、新しいタブでも引き継がれます。<br>
       ・色の意味：白＝静か、黄＝注意、赤＝うるさい。<br>
-      ・赤になったら最大音量設定で注意文を読み上げます。<br>
-      ・音量が足りない場合に備え、読み上げ前アラート音のコードをコメントアウトで追加済みです。<br>
+      ・赤になったら2秒のアラート音を鳴らしてから、最大音量設定で注意文を読み上げます。<br>
       ・iPadで音が出ない場合は、開始後に「音声テスト」を1回押してください。<br>
       ・赤になった後は、しばらく静かになるまで赤を維持します。
     </div>
@@ -207,7 +206,7 @@
     speechCooldownSec: 10
   };
 
-  const SPEECH_TEXT = 'リフレッシュコーナーをご利用の方へ。勉強している子の迷惑になります。小声で話してください。';
+  const SPEECH_TEXT = '勉強している子の迷惑になります。小声で話してください。';
 
   // Web Speech APIで指定できる音量の最大値は 1.0 です。
   // iPad本体の音量も最大にして使ってください。
@@ -240,40 +239,82 @@
   let speechPrimed = false;
   let lastSpeechAt = 0;
 
-  // ===== 読み上げ前アラート音（音量が足りない場合に使う） =====
-  // 初期状態では無効です。使いたい場合は、
-  // 1) 下の playPreAlertBeep() 全体のコメントアウトを解除
-  // 2) speakWarning() 内の // playPreAlertBeep(); のコメントアウトを解除
-  // してください。
+  // ===== 読み上げ前アラート音の旧サンプル（参考用・無効） =====
+  // 下に、今回採用した playPreAlertBeep() を有効な関数として追加しています。
   //
+  // function playPreAlertBeep(){
+  //   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  //   if (!AudioContextClass) return;
+  //
+  //   const audioCtx = ctx || new AudioContextClass();
+  //   try { audioCtx.resume?.(); } catch(_) {}
+  //
+  //   const osc = audioCtx.createOscillator();
+  //   const gain = audioCtx.createGain();
+  //
+  //   // Web Audioのゲインは大きくしすぎると音割れするため、まずは0.7程度にしています。
+  //   // さらに強くしたい場合は 0.9〜1.0 まで上げてください。
+  //   gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+  //   gain.gain.exponentialRampToValueAtTime(0.7, audioCtx.currentTime + 0.02);
+  //   gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.18);
+  //
+  //   osc.type = 'square';
+  //   osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+  //   osc.connect(gain);
+  //   gain.connect(audioCtx.destination);
+  //
+  //   osc.start(audioCtx.currentTime);
+  //   osc.stop(audioCtx.currentTime + 0.2);
+  //
+  //   setTimeout(() => {
+  //     try { osc.disconnect(); } catch(_) {}
+  //     try { gain.disconnect(); } catch(_) {}
+  //     if (!ctx) { try { audioCtx.close(); } catch(_) {} }
+  //   }, 300);
+  // }
+
   function playPreAlertBeep(){
-    if (!ctx) return;
-  
+    if (!ctx) return 0;
+
     const audioCtx = ctx;
-    const duration = 2.0; // ← ここを変える。2秒なら 2.0
-  
+    const duration = 2.0;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-  
+
     osc.type = 'square';
     osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
-  
-    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.35, audioCtx.currentTime + 0.05);
-  
-    // 終了直前に少しだけフェードアウト
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-  
+
     osc.connect(gain);
     gain.connect(audioCtx.destination);
-  
-    osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + duration);
-  
+
+    const t = audioCtx.currentTime;
+    gain.gain.setValueAtTime(0.0001, t);
+
+    // pattern: pulse
+    const pulseOn = 0.22;
+    const pulseOff = 0.15;
+    const cycle = pulseOn + pulseOff;
+
+    for (let startOffset = 0; startOffset < duration; startOffset += cycle){
+      const start = t + startOffset;
+      const end = Math.min(t + duration, start + pulseOn);
+
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(1, start + 0.025);
+      gain.gain.setValueAtTime(1, Math.max(start + 0.03, end - 0.03));
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+    }
+
+    osc.start(t);
+    osc.stop(t + duration + 0.02);
+
     setTimeout(() => {
       try { osc.disconnect(); } catch(_) {}
       try { gain.disconnect(); } catch(_) {}
-    }, (duration + 0.2) * 1000);
+    }, (duration + 0.3) * 1000);
+
+    // 読み上げをアラート音の後に始めるため、秒数を返す
+    return duration;
   }
 
   // ===== ブザー機能（必要になったらコメントアウト解除） =====
@@ -371,14 +412,24 @@
 
     try {
       window.speechSynthesis.cancel();
-      const u = createUtterance(SPEECH_TEXT, SPEECH_VOLUME_MAX);
-      u.onerror = (e) => console.warn('speech error:', e);
 
-      // 音量が足りない場合は、下のコメントアウトを解除すると
-      // 読み上げ直前に短い警告音が鳴ります。
-      playPreAlertBeep();
+      // 2秒のアラート音を先に鳴らし、その後に読み上げます。
+      // アラート音が不要な場合は、次の1行をコメントアウトし、
+      // alertDurationSec を 0 にしてください。
+      const alertDurationSec = playPreAlertBeep();
 
-      window.speechSynthesis.speak(u);
+      const speak = () => {
+        const u = createUtterance(SPEECH_TEXT, SPEECH_VOLUME_MAX);
+        u.onerror = (e) => console.warn('speech error:', e);
+        window.speechSynthesis.speak(u);
+      };
+
+      if (alertDurationSec > 0){
+        setTimeout(speak, (alertDurationSec + 0.15) * 1000);
+      } else {
+        speak();
+      }
+
       if (!force) lastSpeechAt = now;
     } catch(e) {
       console.warn('speech failed:', e);
