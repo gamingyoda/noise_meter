@@ -203,10 +203,10 @@
   const DEFAULTS = {
     noisyDb: -55.0,
     triggerSec: 5,
-    speechCooldownSec: 25
+    speechCooldownSec: 10
   };
 
-  const SPEECH_TEXT = 'リフレッシュコーナーをご利用の方へ。勉強している子の迷惑になります。小声で話してください。';
+  const SPEECH_TEXT = '勉強している子の迷惑です。小声で話してください。';
 
   // 赤になった後にすぐ白へ戻らないようにするための解除条件
   const CLEAR_MARGIN_DB = 2.0; // noisyDb - 2dB を下回ったら静か判定候補
@@ -285,7 +285,7 @@
            null;
   }
 
-  function createUtterance(text, volume = 1.0){
+  function createUtterance(text, volume = 2.0){
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ja-JP';
     u.rate = 0.95;
@@ -328,7 +328,7 @@
 
     try {
       window.speechSynthesis.cancel();
-      const u = createUtterance(SPEECH_TEXT, 1.0);
+      const u = createUtterance(SPEECH_TEXT, 2.0);
       u.onerror = (e) => console.warn('speech error:', e);
       window.speechSynthesis.speak(u);
       if (!force) lastSpeechAt = now;
