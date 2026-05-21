@@ -147,6 +147,47 @@
       line-height:1.6;
       text-align:left;
     }
+
+    details.advanced{
+      margin-top:2px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:rgba(255,255,255,0.54);
+      overflow:hidden;
+    }
+
+    details.advanced summary{
+      cursor:pointer;
+      list-style:none;
+      padding:12px;
+      font-size:14px;
+      font-weight:700;
+      color:var(--muted);
+      text-align:left;
+      user-select:none;
+    }
+
+    details.advanced summary::-webkit-details-marker{
+      display:none;
+    }
+
+    details.advanced summary::after{
+      content:"開く";
+      float:right;
+      font-size:12px;
+      font-weight:700;
+      color:var(--muted);
+    }
+
+    details.advanced[open] summary::after{
+      content:"閉じる";
+    }
+
+    .advanced-body{
+      display:grid;
+      gap:12px;
+      padding:0 12px 12px;
+    }
   </style>
 </head>
 <body class="state-quiet">
@@ -168,10 +209,23 @@
         <label for="speechCooldownInput">読み上げ間隔（秒）</label>
         <input id="speechCooldownInput" type="number" step="1" min="5">
       </div>
-      <div class="row">
-        <label for="recordedGainInput">録音音声の増幅倍率</label>
-        <input id="recordedGainInput" type="number" step="0.1" min="0.1" max="5">
-      </div>
+      <details class="advanced" id="advancedSettings">
+        <summary>詳細設定</summary>
+        <div class="advanced-body">
+          <div class="row">
+            <label for="recordedGainInput">録音音声の増幅倍率</label>
+            <input id="recordedGainInput" type="number" step="0.1" min="0.1" max="5">
+          </div>
+          <div class="row">
+            <label for="alertGainInput">警告音の音量</label>
+            <input id="alertGainInput" type="number" step="0.1" min="0.1" max="3">
+          </div>
+          <div class="row">
+            <label for="recordedRateInput">録音音声の再生速度</label>
+            <input id="recordedRateInput" type="number" step="0.05" min="0.5" max="1.5">
+          </div>
+        </div>
+      </details>
     </div>
 
     <div class="buttons">
@@ -183,6 +237,7 @@
       ・設定はこのブラウザに保存され、新しいタブでも引き継がれます。<br>
       ・色の意味：白＝静か、黄＝注意、赤＝うるさい。<br>
       ・赤になったら2秒のアラート音を鳴らしてから、warning.mp3を増幅して再生します。<br>
+      ・警告音の音量、録音音声の増幅倍率、録音音声の再生速度は「詳細設定」から調整できます。<br>
       ・warning.mp3 がない場合は、従来のブラウザ読み上げに自動で切り替わります。<br>
       ・iPadで音が出ない場合は、開始後に「音声テスト」を1回押してください。<br>
       ・赤になった後は、しばらく静かになるまで赤を維持します。
@@ -199,19 +254,25 @@
   const triggerSecInput = document.getElementById('triggerSecInput');
   const speechCooldownInput = document.getElementById('speechCooldownInput');
   const recordedGainInput = document.getElementById('recordedGainInput');
+  const alertGainInput = document.getElementById('alertGainInput');
+  const recordedRateInput = document.getElementById('recordedRateInput');
 
   const STORAGE_KEYS = {
     noisyDb: 'noise_meter_noisy_db',
     triggerSec: 'noise_meter_trigger_sec',
     speechCooldownSec: 'noise_meter_speech_cooldown_sec',
-    recordedGain: 'noise_meter_recorded_audio_gain'
+    recordedGain: 'noise_meter_recorded_audio_gain',
+    alertGain: 'noise_meter_alert_gain',
+    recordedRate: 'noise_meter_recorded_audio_rate'
   };
 
   const DEFAULTS = {
     noisyDb: -55.0,
     triggerSec: 5,
     speechCooldownSec: 10,
-    recordedGain: 2.0
+    recordedGain: 2.0,
+    alertGain: 1.0,
+    recordedRate: 1.0
   };
 
   const SPEECH_TEXT = 'リフレッシュコーナーをご利用の方へ。勉強している子の迷惑になります。小声で話してください。';
@@ -315,8 +376,8 @@
       const end = Math.min(t + duration, start + pulseOn);
 
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(1, start + 0.025);
-      gain.gain.setValueAtTime(1, Math.max(start + 0.03, end - 0.03));
+      gain.gain.exponentialRampToValueAtTime(getAlertGain(), start + 0.025);
+      gain.gain.setValueAtTime(getAlertGain(), Math.max(start + 0.03, end - 0.03));
       gain.gain.exponentialRampToValueAtTime(0.0001, end);
     }
 
@@ -401,6 +462,16 @@
     return Number.isFinite(v) && v > 0 ? Math.min(v, 5) : DEFAULTS.recordedGain;
   }
 
+  function getAlertGain(){
+    const v = Number(alertGainInput.value);
+    return Number.isFinite(v) && v > 0 ? Math.min(v, 3) : DEFAULTS.alertGain;
+  }
+
+  function getRecordedRate(){
+    const v = Number(recordedRateInput.value);
+    return Number.isFinite(v) && v >= 0.5 && v <= 1.5 ? v : DEFAULTS.recordedRate;
+  }
+
   function playRecordedWarningAudio(){
     if (!ctx || !recordedWarningBuffer) return 0;
 
@@ -408,6 +479,7 @@
     const gain = ctx.createGain();
 
     source.buffer = recordedWarningBuffer;
+    source.playbackRate.setValueAtTime(getRecordedRate(), ctx.currentTime);
     source.connect(gain);
     gain.connect(ctx.destination);
 
@@ -420,9 +492,9 @@
     setTimeout(() => {
       try { source.disconnect(); } catch(_) {}
       try { gain.disconnect(); } catch(_) {}
-    }, (recordedWarningBuffer.duration + 0.3) * 1000);
+    }, (recordedWarningBuffer.duration / getRecordedRate() + 0.3) * 1000);
 
-    return recordedWarningBuffer.duration;
+    return recordedWarningBuffer.duration / getRecordedRate();
   }
 
   function speechSupported(){
@@ -466,6 +538,32 @@
   function stopSpeech(){
     if (!speechSupported()) return;
     try { window.speechSynthesis.cancel(); } catch(_) {}
+  }
+
+  async function prepareAudioForTest(){
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass){
+      alert('このブラウザは音声再生に対応していません。');
+      return false;
+    }
+
+    try {
+      if (!ctx){
+        ctx = new AudioContextClass();
+      }
+
+      await ctx.resume();
+
+      if (!recordedWarningAudioReady && !recordedWarningAudioLoading){
+        await loadRecordedWarningAudio();
+      }
+
+      syncSettingsSummary();
+      return true;
+    } catch(e) {
+      alert('音声テストの準備に失敗しました: ' + (e?.message || e));
+      return false;
+    }
   }
 
   function speakWarning(force = false){
@@ -531,6 +629,8 @@
     localStorage.setItem(STORAGE_KEYS.triggerSec, String(getTriggerSec()));
     localStorage.setItem(STORAGE_KEYS.speechCooldownSec, String(getSpeechCooldownSec()));
     localStorage.setItem(STORAGE_KEYS.recordedGain, String(getRecordedGain()));
+    localStorage.setItem(STORAGE_KEYS.alertGain, String(getAlertGain()));
+    localStorage.setItem(STORAGE_KEYS.recordedRate, String(getRecordedRate()));
   }
 
   function applySettingsToInputs(){
@@ -538,6 +638,8 @@
     triggerSecInput.value = String(loadNumber(STORAGE_KEYS.triggerSec, DEFAULTS.triggerSec));
     speechCooldownInput.value = String(loadNumber(STORAGE_KEYS.speechCooldownSec, DEFAULTS.speechCooldownSec));
     recordedGainInput.value = String(loadNumber(STORAGE_KEYS.recordedGain, DEFAULTS.recordedGain));
+    alertGainInput.value = String(loadNumber(STORAGE_KEYS.alertGain, DEFAULTS.alertGain));
+    recordedRateInput.value = String(loadNumber(STORAGE_KEYS.recordedRate, DEFAULTS.recordedRate));
   }
 
   function getNoisyDb(){
@@ -557,8 +659,10 @@
 
   function syncSettingsSummary(){
     const clearDb = getNoisyDb() - CLEAR_MARGIN_DB;
-    const audioMode = recordedWarningAudioReady ? `録音音声 x${getRecordedGain().toFixed(1)}` : '録音音声未読込';
-    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤 / ${audioMode} / 間隔 ${getSpeechCooldownSec()}秒 / ${clearDb.toFixed(1)}未満が${CLEAR_SEC}秒続くと解除`;
+    const audioMode = recordedWarningAudioReady
+      ? `録音音声 x${getRecordedGain().toFixed(1)} / 速度 ${getRecordedRate().toFixed(2)}x`
+      : '録音音声未読込';
+    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤 / 警告音 ${getAlertGain().toFixed(1)} / ${audioMode} / 間隔 ${getSpeechCooldownSec()}秒 / ${clearDb.toFixed(1)}未満が${CLEAR_SEC}秒続くと解除`;
   }
 
   function setVisualState(state, text){
@@ -789,11 +893,25 @@
     if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
   });
 
+  alertGainInput.addEventListener('input', () => {
+    saveSettings();
+    syncSettingsSummary();
+    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
+  });
+
+  recordedRateInput.addEventListener('input', () => {
+    saveSettings();
+    syncSettingsSummary();
+    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
+  });
+
   window.addEventListener('storage', (event) => {
     if (event.key === STORAGE_KEYS.noisyDb ||
         event.key === STORAGE_KEYS.triggerSec ||
         event.key === STORAGE_KEYS.speechCooldownSec ||
-        event.key === STORAGE_KEYS.recordedGain){
+        event.key === STORAGE_KEYS.recordedGain ||
+        event.key === STORAGE_KEYS.alertGain ||
+        event.key === STORAGE_KEYS.recordedRate){
       applySettingsToInputs();
       syncSettingsSummary();
     }
@@ -804,8 +922,16 @@
     else await start();
   });
 
-  testSpeechBtn.addEventListener('click', () => {
+  testSpeechBtn.addEventListener('click', async () => {
     primeSpeech();
+
+    const ok = await prepareAudioForTest();
+    if (!ok) return;
+
+    // 現在画面に入っているパラメータを保存してからテスト再生します。
+    // 警告音の音量，録音音声の増幅倍率，再生速度もここで反映されます。
+    saveSettings();
+    syncSettingsSummary();
     speakWarning(true);
   });
 
