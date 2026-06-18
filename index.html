@@ -6,17 +6,14 @@
   <title>Noise Monitor</title>
   <style>
     :root{
-      --bg:#07110b;
-      --fg:#effff4;
-      --muted:rgba(239,255,244,0.72);
-      --panel:rgba(0,0,0,0.28);
-      --panel-strong:rgba(0,0,0,0.42);
-      --border:rgba(255,255,255,0.15);
-      --button:rgba(255,255,255,0.10);
-      --green:#00c853;
-      --amber:#ffb300;
-      --red:#ff1744;
-      --shadow:rgba(0,0,0,0.28);
+      --bg:#007aff;
+      --fg:#ffffff;
+      --muted:rgba(255,255,255,0.82);
+      --panel:rgba(255,255,255,0.10);
+      --panel-strong:rgba(0,0,0,0.18);
+      --border:rgba(255,255,255,0.28);
+      --button:rgba(255,255,255,0.18);
+      --button-strong:rgba(255,255,255,0.28);
     }
 
     *{ box-sizing:border-box; }
@@ -31,29 +28,41 @@
       background:var(--bg);
       color:var(--fg);
       padding:16px;
-      transition: background 0.25s ease, color 0.25s ease;
+      transition:background-color 0.18s ease, color 0.18s ease;
       overflow-x:hidden;
     }
 
-    body.state-normal{
-      --bg: radial-gradient(circle at top, #173d24 0%, #07110b 58%, #030604 100%);
-      --fg:#effff4;
-      --muted:rgba(239,255,244,0.70);
-      --button:rgba(0,200,83,0.14);
+    body.state-safe{
+      --bg:#007aff;       /* 信号の青に相当：セーフ */
+      --fg:#ffffff;
+      --muted:rgba(255,255,255,0.82);
+      --panel:rgba(255,255,255,0.10);
+      --panel-strong:rgba(0,0,0,0.16);
+      --border:rgba(255,255,255,0.30);
+      --button:rgba(255,255,255,0.18);
+      --button-strong:rgba(255,255,255,0.30);
     }
 
     body.state-caution{
-      --bg: radial-gradient(circle at top, #5a4300 0%, #241900 58%, #090700 100%);
-      --fg:#fff8dc;
-      --muted:rgba(255,248,220,0.74);
-      --button:rgba(255,179,0,0.18);
+      --bg:#ffd400;       /* 黄色：注意 */
+      --fg:#111111;
+      --muted:rgba(0,0,0,0.66);
+      --panel:rgba(255,255,255,0.20);
+      --panel-strong:rgba(255,255,255,0.36);
+      --border:rgba(0,0,0,0.18);
+      --button:rgba(255,255,255,0.36);
+      --button-strong:rgba(255,255,255,0.56);
     }
 
-    body.state-warning{
-      --bg: radial-gradient(circle at top, #620015 0%, #250007 58%, #080002 100%);
-      --fg:#fff2f4;
-      --muted:rgba(255,242,244,0.78);
-      --button:rgba(255,23,68,0.18);
+    body.state-out{
+      --bg:#ff1744;       /* 赤：アウト */
+      --fg:#ffffff;
+      --muted:rgba(255,255,255,0.84);
+      --panel:rgba(255,255,255,0.11);
+      --panel-strong:rgba(0,0,0,0.22);
+      --border:rgba(255,255,255,0.32);
+      --button:rgba(255,255,255,0.18);
+      --button-strong:rgba(255,255,255,0.30);
     }
 
     .app{
@@ -62,122 +71,90 @@
       gap:14px;
     }
 
-    .topbar{
+    .panel{
+      min-height:calc(100vh - 32px);
       display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
+      flex-direction:column;
+      justify-content:center;
+      text-align:center;
+      border:1px solid var(--border);
+      border-radius:28px;
+      background:var(--panel);
+      padding:24px 20px;
+    }
+
+    .label{
+      font-size:13px;
+      font-weight:900;
+      letter-spacing:0.18em;
       color:var(--muted);
-      font-size:12px;
-      letter-spacing:0.14em;
       text-transform:uppercase;
       user-select:none;
     }
 
-    .panel{
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:24px;
-      box-shadow:0 20px 60px var(--shadow);
-      backdrop-filter: blur(14px);
-      padding:22px;
-      text-align:center;
-    }
-
-    .lights{
-      display:flex;
-      justify-content:center;
-      gap:14px;
-      margin-bottom:18px;
-    }
-
-    .light{
-      width:30px;
-      height:30px;
-      border-radius:50%;
-      background:rgba(255,255,255,0.12);
-      border:1px solid rgba(255,255,255,0.16);
-      box-shadow:inset 0 0 16px rgba(0,0,0,0.36);
-      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-    }
-
-    body.state-normal .light.green{
-      background:var(--green);
-      box-shadow:0 0 24px var(--green), inset 0 0 14px rgba(255,255,255,0.45);
-      transform:scale(1.1);
-    }
-    body.state-caution .light.amber{
-      background:var(--amber);
-      box-shadow:0 0 26px var(--amber), inset 0 0 14px rgba(255,255,255,0.48);
-      transform:scale(1.1);
-    }
-    body.state-warning .light.red{
-      background:var(--red);
-      box-shadow:0 0 30px var(--red), inset 0 0 14px rgba(255,255,255,0.50);
-      transform:scale(1.1);
-    }
-
     #statusEn{
-      font-size:48px;
-      line-height:1;
-      font-weight:900;
-      letter-spacing:0.08em;
-      margin:0;
+      margin:18px 0 0;
+      font-size:clamp(56px, 15vw, 118px);
+      line-height:0.95;
+      font-weight:1000;
+      letter-spacing:0.06em;
     }
 
     #statusJa{
-      margin-top:10px;
-      font-size:22px;
-      font-weight:800;
+      margin-top:14px;
+      font-size:clamp(24px, 7vw, 44px);
+      font-weight:900;
+      letter-spacing:0.04em;
     }
 
     #db{
-      margin-top:16px;
-      font-size:76px;
+      margin-top:24px;
+      font-size:clamp(64px, 17vw, 124px);
       line-height:1;
-      font-weight:900;
-      letter-spacing:-0.04em;
+      font-weight:1000;
+      letter-spacing:-0.05em;
       font-variant-numeric:tabular-nums;
     }
 
     #sub{
       margin-top:8px;
       color:var(--muted);
-      font-size:14px;
+      font-size:15px;
       line-height:1.7;
+      font-weight:700;
     }
 
     .buttons{
       display:grid;
       grid-template-columns:1fr auto;
       gap:10px;
-      margin-top:18px;
+      margin-top:26px;
     }
 
     button{
       appearance:none;
       border:1px solid var(--border);
-      border-radius:14px;
-      padding:13px 16px;
-      font-size:16px;
-      font-weight:800;
+      border-radius:16px;
+      padding:14px 16px;
+      font-size:17px;
+      font-weight:900;
       background:var(--button);
       color:var(--fg);
       cursor:pointer;
+      backdrop-filter:blur(8px);
     }
 
-    button:disabled{
-      opacity:0.55;
-      cursor:not-allowed;
-    }
+    button.primary{ background:var(--button-strong); }
+    button:disabled{ opacity:0.55; cursor:not-allowed; }
 
     .settings{
       display:none;
       background:var(--panel-strong);
       border:1px solid var(--border);
-      border-radius:20px;
+      border-radius:22px;
       padding:14px;
       text-align:left;
+      backdrop-filter:blur(10px);
     }
 
     .settings.open{ display:block; }
@@ -190,10 +167,7 @@
       text-transform:uppercase;
     }
 
-    .grid{
-      display:grid;
-      gap:10px;
-    }
+    .grid{ display:grid; gap:10px; }
 
     .row{
       display:grid;
@@ -207,23 +181,21 @@
       font-size:14px;
       color:var(--muted);
       line-height:1.4;
+      font-weight:700;
     }
 
     .row input,
     .row select{
-      width:118px;
+      width:120px;
       padding:9px 10px;
       border-radius:10px;
       border:1px solid var(--border);
-      background:rgba(255,255,255,0.92);
+      background:rgba(255,255,255,0.94);
       color:#111;
       font-size:15px;
     }
 
-    .row input[type="checkbox"]{
-      width:24px;
-      height:24px;
-    }
+    .row input[type="checkbox"]{ width:24px; height:24px; }
 
     .section{
       margin-top:12px;
@@ -240,18 +212,17 @@
 
     .pill{
       display:inline-block;
-      margin-top:8px;
-      padding:5px 9px;
+      margin-top:10px;
+      padding:5px 10px;
       border:1px solid var(--border);
       border-radius:999px;
       color:var(--muted);
       font-size:12px;
+      font-weight:800;
     }
 
     @media (max-width:440px){
-      #statusEn{ font-size:36px; }
-      #statusJa{ font-size:20px; }
-      #db{ font-size:64px; }
+      .panel{ min-height:calc(100vh - 32px); }
       .buttons{ grid-template-columns:1fr; }
       .row{ grid-template-columns:1fr; }
       .row input,
@@ -259,27 +230,17 @@
     }
   </style>
 </head>
-<body class="state-normal">
+<body class="state-safe">
   <main class="app">
-    <div class="topbar">
-      <span>NOISE MONITOR</span>
-      <span id="modeLabel">CLIENT ONLY</span>
-    </div>
-
     <section class="panel" aria-live="polite">
-      <div class="lights" aria-hidden="true">
-        <div class="light green"></div>
-        <div class="light amber"></div>
-        <div class="light red"></div>
-      </div>
-
+      <div class="label">NOISE MONITOR</div>
       <h1 id="statusEn">STANDBY</h1>
       <div id="statusJa">待機中</div>
       <div id="db">--</div>
-      <div id="sub">dBFS（SLOW表示） / 設定は右下から変更</div>
+      <div id="sub">青＝セーフ / 黄＝注意 / 赤＝アウト</div>
 
       <div class="buttons">
-        <button id="btn" data-state="off">開始</button>
+        <button id="btn" class="primary" data-state="off">開始</button>
         <button id="settingsBtn" type="button" aria-expanded="false">設定</button>
       </div>
       <div class="pill" id="filterPill">FILTER STANDBY / 現在無効</div>
@@ -293,7 +254,7 @@
           <input id="cautionDbInput" type="number" step="0.1">
         </div>
         <div class="row">
-          <label for="warningDbInput">赤基準 WARNING（dBFS）<br>人が注意しに来る状態</label>
+          <label for="warningDbInput">赤基準 OUT（dBFS）<br>人が注意しに来る状態</label>
           <input id="warningDbInput" type="number" step="0.1">
         </div>
         <div class="row">
@@ -425,8 +386,6 @@
     lowpassHz: 4000
   };
 
-  // 自販機ノイズの計測が終わるまでは必ず false のままにする．
-  // 将来フィルターを有効化する時だけ true に変更し，connectAudioGraph() の分岐を使う．
   const FILTER_ENGINE_ENABLED = false;
 
   let ctx = null;
@@ -446,7 +405,7 @@
   const TAU_SLOW = 1.0;
   const EPS = 1e-18;
 
-  let currentState = 'normal';
+  let currentState = 'safe';
   let cautionCount = 0;
   let warningCount = 0;
   let clearCount = 0;
@@ -477,6 +436,20 @@
     return raw === null ? fallback : raw;
   }
 
+  function validNumber(value, fallback, min=-Infinity){
+    const n = Number(value);
+    return Number.isFinite(n) && n >= min ? n : fallback;
+  }
+
+  function validInt(value, fallback, min=1){
+    const n = Math.floor(Number(value));
+    return Number.isFinite(n) && n >= min ? n : fallback;
+  }
+
+  function clamp(x, a, b){
+    return Math.min(b, Math.max(a, x));
+  }
+
   function getSettings(){
     return {
       cautionDb: validNumber(cautionDbInput.value, DEFAULTS.cautionDb),
@@ -493,20 +466,6 @@
       highpassHz: validNumber(highpassHzInput.value, DEFAULTS.highpassHz, 20),
       lowpassHz: validNumber(lowpassHzInput.value, DEFAULTS.lowpassHz, 20)
     };
-  }
-
-  function validNumber(value, fallback, min=-Infinity){
-    const n = Number(value);
-    return Number.isFinite(n) && n >= min ? n : fallback;
-  }
-
-  function validInt(value, fallback, min=1){
-    const n = Math.floor(Number(value));
-    return Number.isFinite(n) && n >= min ? n : fallback;
-  }
-
-  function clamp(x, a, b){
-    return Math.min(b, Math.max(a, x));
   }
 
   function applySettingsToInputs(){
@@ -545,13 +504,13 @@
 
   function updateSummary(){
     const s = getSettings();
-    subEl.textContent = `CAUTION ${s.cautionDb.toFixed(1)} dBFS / WARNING ${s.warningDb.toFixed(1)} dBFS / SLOW表示`;
+    subEl.textContent = `CAUTION ${s.cautionDb.toFixed(1)} dBFS / OUT ${s.warningDb.toFixed(1)} dBFS / SLOW表示`;
     filterPill.textContent = FILTER_ENGINE_ENABLED ? `FILTER ${s.filterMode.toUpperCase()}` : 'FILTER STANDBY / 現在無効';
   }
 
   function setState(state, en, ja){
     currentState = state;
-    document.body.classList.remove('state-normal', 'state-caution', 'state-warning');
+    document.body.classList.remove('state-safe', 'state-caution', 'state-out');
     document.body.classList.add(`state-${state}`);
     statusEnEl.textContent = en;
     statusJaEl.textContent = ja;
@@ -561,7 +520,7 @@
     cautionCount = 0;
     warningCount = 0;
     clearCount = 0;
-    setState('normal', 'NORMAL', '静か');
+    setState('safe', 'SAFE', '静か');
   }
 
   function calcPowerAndSumSq(floatData){
@@ -583,7 +542,6 @@
     analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
 
-    // 現在はフィルターを絶対に使わない．将来の有効化時は FILTER_ENGINE_ENABLED を true にする．
     if (!FILTER_ENGINE_ENABLED){
       src.connect(analyser);
       return;
@@ -609,7 +567,7 @@
     }
   }
 
-  function playAviationTone(kind='warning'){
+  function playAviationTone(kind='out'){
     if (!ctx) return;
     const s = getSettings();
     if (!s.audioEnabled) return;
@@ -620,16 +578,16 @@
     const master = ctx.createGain();
     master.gain.setValueAtTime(0.0001, t0);
     master.gain.exponentialRampToValueAtTime(Math.max(0.001, s.audioVolume), t0 + 0.03);
-    master.gain.exponentialRampToValueAtTime(0.0001, t0 + (kind === 'warning' ? 1.25 : 0.45));
+    master.gain.exponentialRampToValueAtTime(0.0001, t0 + (kind === 'out' ? 1.25 : 0.45));
     master.connect(ctx.destination);
 
-    const freqs = kind === 'warning' ? [880, 660, 880, 660] : [660, 660];
-    const step = kind === 'warning' ? 0.28 : 0.18;
+    const freqs = kind === 'out' ? [880, 660, 880, 660] : [660, 660];
+    const step = kind === 'out' ? 0.28 : 0.18;
 
     freqs.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = kind === 'warning' ? 'square' : 'sine';
+      osc.type = kind === 'out' ? 'square' : 'sine';
       osc.frequency.setValueAtTime(freq, t0 + i * step);
       gain.gain.setValueAtTime(0.0001, t0 + i * step);
       gain.gain.exponentialRampToValueAtTime(1.0, t0 + i * step + 0.02);
@@ -641,10 +599,10 @@
 
     setTimeout(() => {
       try { master.disconnect(); } catch(_) {}
-    }, kind === 'warning' ? 1500 : 700);
+    }, kind === 'out' ? 1500 : 700);
   }
 
-  function speakAlert(kind='warning'){
+  function speakAlert(kind='out'){
     const s = getSettings();
     if (!s.audioEnabled || !('speechSynthesis' in window)) return;
 
@@ -652,10 +610,10 @@
     if (now - lastVoiceAt < s.voiceCooldownSec * 1000) return;
     lastVoiceAt = now;
 
-    const ja = kind === 'warning'
+    const ja = kind === 'out'
       ? '警告。声量を下げてください。自習室の利用者の迷惑になります。'
       : '注意。声量が大きくなっています。';
-    const en = kind === 'warning'
+    const en = kind === 'out'
       ? 'Warning. Please lower your voice. This is a quiet study area.'
       : 'Caution. Noise level is increasing.';
 
@@ -691,7 +649,7 @@
     const s = getSettings();
     const clearDb = s.warningDb - s.clearMarginDb;
 
-    if (currentState === 'warning'){
+    if (currentState === 'out'){
       if (db1s < clearDb){
         clearCount += 1;
       } else {
@@ -702,12 +660,12 @@
         warningCount = 0;
         clearCount = 0;
         if (db1s >= s.cautionDb){
-          setState('caution', 'CAUTION', '声量注意');
+          setState('caution', 'CAUTION', '注意');
         } else {
-          setState('normal', 'NORMAL', '静か');
+          setState('safe', 'SAFE', 'セーフ');
         }
       } else {
-        setState('warning', 'WARNING', '注意が必要です');
+        setState('out', 'OUT', 'アウト');
       }
       return;
     }
@@ -727,29 +685,26 @@
     }
 
     if (warningCount >= s.warningSec){
-      setState('warning', 'WARNING', '注意が必要です');
-      playAviationTone('warning');
-      speakAlert('warning');
+      setState('out', 'OUT', 'アウト');
+      playAviationTone('out');
+      speakAlert('out');
       return;
     }
 
     if (cautionCount >= s.cautionSec){
-      setState('caution', 'CAUTION', '声量注意');
-      // 黄色では音声は鳴らしすぎない．必要なら下の2行を有効化する．
-      // playAviationTone('caution');
-      // speakAlert('caution');
+      setState('caution', 'CAUTION', '注意');
       return;
     }
 
-    const remainingWarning = Math.max(0, s.warningSec - warningCount);
+    const remainingOut = Math.max(0, s.warningSec - warningCount);
     const remainingCaution = Math.max(0, s.cautionSec - cautionCount);
 
     if (warningCount > 0){
-      setState('caution', 'CAUTION', `赤まで ${remainingWarning}秒`);
+      setState('caution', 'CAUTION', `赤まで ${remainingOut}秒`);
     } else if (cautionCount > 0){
       setState('caution', 'CAUTION', `黄まで ${remainingCaution}秒`);
     } else {
-      setState('normal', 'NORMAL', '静か');
+      setState('safe', 'SAFE', 'セーフ');
     }
   }
 
@@ -868,7 +823,7 @@
 
     dbEl.textContent = '--';
     updateSummary();
-    setState('normal', 'STANDBY', '待機中');
+    setState('safe', 'STANDBY', '待機中');
 
     btn.textContent = '開始';
     btn.dataset.state = 'off';
@@ -905,7 +860,7 @@
     if (Object.values(STORAGE_KEYS).includes(event.key)){
       applySettingsToInputs();
       updateSummary();
-      if (btn.dataset.state !== 'on') setState('normal', 'STANDBY', '待機中');
+      if (btn.dataset.state !== 'on') setState('safe', 'STANDBY', '待機中');
     }
   });
 
@@ -920,13 +875,13 @@
       return;
     }
     primeAudio();
-    playAviationTone('warning');
-    speakAlert('warning');
+    playAviationTone('out');
+    speakAlert('out');
   });
 
   applySettingsToInputs();
   updateSummary();
-  setState('normal', 'STANDBY', '待機中');
+  setState('safe', 'STANDBY', '待機中');
 </script>
 </body>
 </html>
