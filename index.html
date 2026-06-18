@@ -3,15 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Noise Meter</title>
+  <title>Noise Monitor</title>
   <style>
     :root{
-      --bg: #f6f7f9;
-      --fg: #111;
-      --muted: #666;
-      --panel: rgba(255,255,255,0.86);
-      --border: rgba(0,0,0,0.08);
-      --button: #f1f3f5;
+      --bg:#07110b;
+      --fg:#effff4;
+      --muted:rgba(239,255,244,0.72);
+      --panel:rgba(0,0,0,0.28);
+      --panel-strong:rgba(0,0,0,0.42);
+      --border:rgba(255,255,255,0.15);
+      --button:rgba(255,255,255,0.10);
+      --green:#00c853;
+      --amber:#ffb300;
+      --red:#ff1744;
+      --shadow:rgba(0,0,0,0.28);
     }
 
     *{ box-sizing:border-box; }
@@ -19,285 +24,418 @@
     body{
       margin:0;
       min-height:100vh;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       display:flex;
       align-items:center;
       justify-content:center;
       background:var(--bg);
       color:var(--fg);
-      transition: background-color 0.25s ease, color 0.25s ease;
       padding:16px;
+      transition: background 0.25s ease, color 0.25s ease;
+      overflow-x:hidden;
     }
 
-    body.state-quiet{
-      --bg:#f6f7f9;
-      --fg:#111;
-      --muted:#666;
-      --panel:rgba(255,255,255,0.88);
-      --border:rgba(0,0,0,0.08);
-      --button:#f1f3f5;
+    body.state-normal{
+      --bg: radial-gradient(circle at top, #173d24 0%, #07110b 58%, #030604 100%);
+      --fg:#effff4;
+      --muted:rgba(239,255,244,0.70);
+      --button:rgba(0,200,83,0.14);
+    }
+
+    body.state-caution{
+      --bg: radial-gradient(circle at top, #5a4300 0%, #241900 58%, #090700 100%);
+      --fg:#fff8dc;
+      --muted:rgba(255,248,220,0.74);
+      --button:rgba(255,179,0,0.18);
     }
 
     body.state-warning{
-      --bg:#fff3cd;
-      --fg:#5c4500;
-      --muted:#856404;
-      --panel:rgba(255,255,255,0.84);
-      --border:rgba(133,100,4,0.18);
-      --button:#fff8e1;
+      --bg: radial-gradient(circle at top, #620015 0%, #250007 58%, #080002 100%);
+      --fg:#fff2f4;
+      --muted:rgba(255,242,244,0.78);
+      --button:rgba(255,23,68,0.18);
     }
 
-    body.state-noisy{
-      --bg:#f8d7da;
-      --fg:#6a1118;
-      --muted:#842029;
-      --panel:rgba(255,255,255,0.84);
-      --border:rgba(132,32,41,0.18);
-      --button:#fcebec;
+    .app{
+      width:min(680px, 100%);
+      display:grid;
+      gap:14px;
     }
 
-    .box{
-      width:min(560px, 100%);
-      text-align:center;
-      padding:24px 20px;
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      color:var(--muted);
+      font-size:12px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      user-select:none;
+    }
+
+    .panel{
       background:var(--panel);
       border:1px solid var(--border);
-      border-radius:20px;
-      backdrop-filter: blur(10px);
+      border-radius:24px;
+      box-shadow:0 20px 60px var(--shadow);
+      backdrop-filter: blur(14px);
+      padding:22px;
+      text-align:center;
+    }
+
+    .lights{
+      display:flex;
+      justify-content:center;
+      gap:14px;
+      margin-bottom:18px;
+    }
+
+    .light{
+      width:30px;
+      height:30px;
+      border-radius:50%;
+      background:rgba(255,255,255,0.12);
+      border:1px solid rgba(255,255,255,0.16);
+      box-shadow:inset 0 0 16px rgba(0,0,0,0.36);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    body.state-normal .light.green{
+      background:var(--green);
+      box-shadow:0 0 24px var(--green), inset 0 0 14px rgba(255,255,255,0.45);
+      transform:scale(1.1);
+    }
+    body.state-caution .light.amber{
+      background:var(--amber);
+      box-shadow:0 0 26px var(--amber), inset 0 0 14px rgba(255,255,255,0.48);
+      transform:scale(1.1);
+    }
+    body.state-warning .light.red{
+      background:var(--red);
+      box-shadow:0 0 30px var(--red), inset 0 0 14px rgba(255,255,255,0.50);
+      transform:scale(1.1);
+    }
+
+    #statusEn{
+      font-size:48px;
+      line-height:1;
+      font-weight:900;
+      letter-spacing:0.08em;
+      margin:0;
+    }
+
+    #statusJa{
+      margin-top:10px;
+      font-size:22px;
+      font-weight:800;
     }
 
     #db{
-      font-size:80px;
-      font-weight:800;
-      letter-spacing:-0.03em;
+      margin-top:16px;
+      font-size:76px;
       line-height:1;
-      font-variant-numeric: tabular-nums;
-    }
-
-    #status{
-      margin-top:10px;
-      font-size:28px;
-      font-weight:700;
+      font-weight:900;
+      letter-spacing:-0.04em;
+      font-variant-numeric:tabular-nums;
     }
 
     #sub{
       margin-top:8px;
-      font-size:14px;
       color:var(--muted);
-      line-height:1.6;
-    }
-
-    .controls{
-      margin-top:18px;
-      display:grid;
-      gap:12px;
+      font-size:14px;
+      line-height:1.7;
     }
 
     .buttons{
-      margin-top:6px;
       display:grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns:1fr auto;
       gap:10px;
+      margin-top:18px;
     }
 
-    @media (max-width: 420px){
-      .buttons{ grid-template-columns: 1fr; }
-      #db{ font-size:68px; }
-      #status{ font-size:24px; }
+    button{
+      appearance:none;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:13px 16px;
+      font-size:16px;
+      font-weight:800;
+      background:var(--button);
+      color:var(--fg);
+      cursor:pointer;
+    }
+
+    button:disabled{
+      opacity:0.55;
+      cursor:not-allowed;
+    }
+
+    .settings{
+      display:none;
+      background:var(--panel-strong);
+      border:1px solid var(--border);
+      border-radius:20px;
+      padding:14px;
+      text-align:left;
+    }
+
+    .settings.open{ display:block; }
+
+    .settings h2{
+      margin:0 0 10px;
+      font-size:16px;
+      letter-spacing:0.08em;
+      color:var(--muted);
+      text-transform:uppercase;
+    }
+
+    .grid{
+      display:grid;
+      gap:10px;
     }
 
     .row{
       display:grid;
       grid-template-columns: 1fr auto;
-      gap:10px;
+      gap:12px;
       align-items:center;
-      text-align:left;
+      min-height:42px;
     }
 
     .row label{
       font-size:14px;
       color:var(--muted);
+      line-height:1.4;
     }
 
-    .row input{
-      width:110px;
-      padding:10px 12px;
-      font-size:16px;
+    .row input,
+    .row select{
+      width:118px;
+      padding:9px 10px;
+      border-radius:10px;
       border:1px solid var(--border);
-      border-radius:12px;
-      background:#fff;
+      background:rgba(255,255,255,0.92);
       color:#111;
+      font-size:15px;
     }
 
-    button{
-      margin-top:6px;
-      padding:12px 18px;
-      font-size:16px;
-      font-weight:700;
-      border:1px solid var(--border);
-      border-radius:12px;
-      background:var(--button);
-      color:var(--fg);
+    .row input[type="checkbox"]{
+      width:24px;
+      height:24px;
+    }
+
+    .section{
+      margin-top:12px;
+      padding-top:12px;
+      border-top:1px solid var(--border);
     }
 
     .note{
       margin-top:10px;
-      font-size:12px;
       color:var(--muted);
+      font-size:12px;
       line-height:1.6;
-      text-align:left;
     }
 
-    details.advanced{
-      margin-top:2px;
+    .pill{
+      display:inline-block;
+      margin-top:8px;
+      padding:5px 9px;
       border:1px solid var(--border);
-      border-radius:14px;
-      background:rgba(255,255,255,0.54);
-      overflow:hidden;
-    }
-
-    details.advanced summary{
-      cursor:pointer;
-      list-style:none;
-      padding:12px;
-      font-size:14px;
-      font-weight:700;
+      border-radius:999px;
       color:var(--muted);
-      text-align:left;
-      user-select:none;
-    }
-
-    details.advanced summary::-webkit-details-marker{
-      display:none;
-    }
-
-    details.advanced summary::after{
-      content:"開く";
-      float:right;
       font-size:12px;
-      font-weight:700;
-      color:var(--muted);
     }
 
-    details.advanced[open] summary::after{
-      content:"閉じる";
-    }
-
-    .advanced-body{
-      display:grid;
-      gap:12px;
-      padding:0 12px 12px;
+    @media (max-width:440px){
+      #statusEn{ font-size:36px; }
+      #statusJa{ font-size:20px; }
+      #db{ font-size:64px; }
+      .buttons{ grid-template-columns:1fr; }
+      .row{ grid-template-columns:1fr; }
+      .row input,
+      .row select{ width:100%; }
     }
   </style>
 </head>
-<body class="state-quiet">
-  <div class="box">
-    <div id="db">--</div>
-    <div id="status">待機中</div>
-    <div id="sub">dBFS（SLOW表示） / client only / GitHub Pages向け</div>
+<body class="state-normal">
+  <main class="app">
+    <div class="topbar">
+      <span>NOISE MONITOR</span>
+      <span id="modeLabel">CLIENT ONLY</span>
+    </div>
 
-    <div class="controls">
-      <div class="row">
-        <label for="noisyDbInput">うるさい基準（dBFS）</label>
-        <input id="noisyDbInput" type="number" step="0.1">
+    <section class="panel" aria-live="polite">
+      <div class="lights" aria-hidden="true">
+        <div class="light green"></div>
+        <div class="light amber"></div>
+        <div class="light red"></div>
       </div>
-      <div class="row">
-        <label for="triggerSecInput">判定秒数（連続）</label>
-        <input id="triggerSecInput" type="number" step="1" min="1">
+
+      <h1 id="statusEn">STANDBY</h1>
+      <div id="statusJa">待機中</div>
+      <div id="db">--</div>
+      <div id="sub">dBFS（SLOW表示） / 設定は右下から変更</div>
+
+      <div class="buttons">
+        <button id="btn" data-state="off">開始</button>
+        <button id="settingsBtn" type="button" aria-expanded="false">設定</button>
       </div>
-      <div class="row">
-        <label for="speechCooldownInput">読み上げ間隔（秒）</label>
-        <input id="speechCooldownInput" type="number" step="1" min="5">
+      <div class="pill" id="filterPill">FILTER STANDBY / 現在無効</div>
+    </section>
+
+    <section class="settings" id="settingsPanel">
+      <h2>Settings</h2>
+      <div class="grid">
+        <div class="row">
+          <label for="cautionDbInput">黄色基準 CAUTION（dBFS）<br>まずい状態の入口</label>
+          <input id="cautionDbInput" type="number" step="0.1">
+        </div>
+        <div class="row">
+          <label for="warningDbInput">赤基準 WARNING（dBFS）<br>人が注意しに来る状態</label>
+          <input id="warningDbInput" type="number" step="0.1">
+        </div>
+        <div class="row">
+          <label for="cautionSecInput">黄色判定秒数（連続）</label>
+          <input id="cautionSecInput" type="number" step="1" min="1">
+        </div>
+        <div class="row">
+          <label for="warningSecInput">赤判定秒数（連続）</label>
+          <input id="warningSecInput" type="number" step="1" min="1">
+        </div>
+        <div class="row">
+          <label for="clearMarginInput">解除マージン（dB）<br>赤基準より何dB下がったら解除候補にするか</label>
+          <input id="clearMarginInput" type="number" step="0.1" min="0">
+        </div>
+        <div class="row">
+          <label for="clearSecInput">解除秒数（連続）</label>
+          <input id="clearSecInput" type="number" step="1" min="1">
+        </div>
       </div>
-      <details class="advanced" id="advancedSettings">
-        <summary>詳細設定</summary>
-        <div class="advanced-body">
+
+      <div class="section">
+        <h2>Audio / Voice</h2>
+        <div class="grid">
           <div class="row">
-            <label for="recordedGainInput">録音音声の増幅倍率</label>
-            <input id="recordedGainInput" type="number" step="0.1" min="0.1" max="5">
+            <label for="audioEnabledInput">警告音・人工音声を有効化</label>
+            <input id="audioEnabledInput" type="checkbox">
           </div>
           <div class="row">
-            <label for="alertGainInput">警告音の音量</label>
-            <input id="alertGainInput" type="number" step="0.1" min="0.1" max="3">
+            <label for="voiceLangInput">人工音声の言語</label>
+            <select id="voiceLangInput">
+              <option value="ja">日本語</option>
+              <option value="en">English</option>
+              <option value="both">日本語 + English</option>
+            </select>
           </div>
           <div class="row">
-            <label for="recordedRateInput">録音音声の再生速度</label>
-            <input id="recordedRateInput" type="number" step="0.05" min="0.5" max="1.5">
+            <label for="voiceCooldownInput">音声再通知間隔（秒）</label>
+            <input id="voiceCooldownInput" type="number" step="1" min="5">
+          </div>
+          <div class="row">
+            <label for="audioVolumeInput">警告音量</label>
+            <input id="audioVolumeInput" type="number" step="0.05" min="0" max="1">
+          </div>
+          <button id="testAudioBtn" type="button">音声テスト</button>
+        </div>
+        <div class="note">赤になった時だけ，航空機の警報風の短いトーンと人工音声を鳴らします．iPadで音が出ない場合は，開始後に音声テストを1回押してください．</div>
+      </div>
+
+      <div class="section">
+        <h2>Filter Scaffold</h2>
+        <div class="grid">
+          <div class="row">
+            <label for="filterModeInput">フィルター方式（現在は無効）</label>
+            <select id="filterModeInput" disabled>
+              <option value="off">OFF</option>
+              <option value="highpass">High-pass</option>
+              <option value="lowpass">Low-pass</option>
+              <option value="bandpass">Band-pass</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="highpassHzInput">High-pass cutoff（Hz・準備中）</label>
+            <input id="highpassHzInput" type="number" step="10" min="20" max="8000" disabled>
+          </div>
+          <div class="row">
+            <label for="lowpassHzInput">Low-pass cutoff（Hz・準備中）</label>
+            <input id="lowpassHzInput" type="number" step="10" min="20" max="12000" disabled>
           </div>
         </div>
-      </details>
-    </div>
-
-    <div class="buttons">
-      <button id="btn" data-state="off">開始</button>
-      <button id="testSpeechBtn" type="button">音声テスト</button>
-    </div>
-
-    <div class="note">
-      ・設定はこのブラウザに保存され、新しいタブでも引き継がれます。<br>
-      ・色の意味：白＝静か、黄＝注意、赤＝うるさい。<br>
-      ・赤になったら2秒のアラート音を鳴らしてから、warning.mp3を増幅して再生します。<br>
-      ・警告音の音量、録音音声の増幅倍率、録音音声の再生速度は「詳細設定」から調整できます。<br>
-      ・warning.mp3 がない場合は、従来のブラウザ読み上げに自動で切り替わります。<br>
-      ・iPadで音が出ない場合は、開始後に「音声テスト」を1回押してください。<br>
-      ・赤になった後は、しばらく静かになるまで赤を維持します。
-    </div>
-  </div>
+        <div class="note">自販機ノイズの帯域測定が終わるまでは，フィルターは意図的に動作しません．将来は source → filterChain → analyser の接続に切り替えるだけで有効化できる構造にしています．</div>
+      </div>
+    </section>
+  </main>
 
 <script>
   const dbEl = document.getElementById('db');
-  const statusEl = document.getElementById('status');
+  const statusEnEl = document.getElementById('statusEn');
+  const statusJaEl = document.getElementById('statusJa');
   const subEl = document.getElementById('sub');
   const btn = document.getElementById('btn');
-  const testSpeechBtn = document.getElementById('testSpeechBtn');
-  const noisyDbInput = document.getElementById('noisyDbInput');
-  const triggerSecInput = document.getElementById('triggerSecInput');
-  const speechCooldownInput = document.getElementById('speechCooldownInput');
-  const recordedGainInput = document.getElementById('recordedGainInput');
-  const alertGainInput = document.getElementById('alertGainInput');
-  const recordedRateInput = document.getElementById('recordedRateInput');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const filterPill = document.getElementById('filterPill');
+
+  const cautionDbInput = document.getElementById('cautionDbInput');
+  const warningDbInput = document.getElementById('warningDbInput');
+  const cautionSecInput = document.getElementById('cautionSecInput');
+  const warningSecInput = document.getElementById('warningSecInput');
+  const clearMarginInput = document.getElementById('clearMarginInput');
+  const clearSecInput = document.getElementById('clearSecInput');
+  const audioEnabledInput = document.getElementById('audioEnabledInput');
+  const voiceLangInput = document.getElementById('voiceLangInput');
+  const voiceCooldownInput = document.getElementById('voiceCooldownInput');
+  const audioVolumeInput = document.getElementById('audioVolumeInput');
+  const testAudioBtn = document.getElementById('testAudioBtn');
+  const filterModeInput = document.getElementById('filterModeInput');
+  const highpassHzInput = document.getElementById('highpassHzInput');
+  const lowpassHzInput = document.getElementById('lowpassHzInput');
 
   const STORAGE_KEYS = {
-    noisyDb: 'noise_meter_noisy_db',
-    triggerSec: 'noise_meter_trigger_sec',
-    speechCooldownSec: 'noise_meter_speech_cooldown_sec',
-    recordedGain: 'noise_meter_recorded_audio_gain',
-    alertGain: 'noise_meter_alert_gain',
-    recordedRate: 'noise_meter_recorded_audio_rate'
+    cautionDb: 'noise_meter_caution_db',
+    warningDb: 'noise_meter_warning_db',
+    cautionSec: 'noise_meter_caution_sec',
+    warningSec: 'noise_meter_warning_sec',
+    clearMarginDb: 'noise_meter_clear_margin_db',
+    clearSec: 'noise_meter_clear_sec',
+    audioEnabled: 'noise_meter_audio_enabled',
+    voiceLang: 'noise_meter_voice_lang',
+    voiceCooldownSec: 'noise_meter_voice_cooldown_sec',
+    audioVolume: 'noise_meter_audio_volume',
+    filterMode: 'noise_meter_filter_mode',
+    highpassHz: 'noise_meter_highpass_hz',
+    lowpassHz: 'noise_meter_lowpass_hz'
   };
 
   const DEFAULTS = {
-    noisyDb: -55.0,
-    triggerSec: 5,
-    speechCooldownSec: 10,
-    recordedGain: 2.0,
-    alertGain: 1.0,
-    recordedRate: 1.0
+    cautionDb: -58.0,
+    warningDb: -55.0,
+    cautionSec: 3,
+    warningSec: 5,
+    clearMarginDb: 2.0,
+    clearSec: 3,
+    audioEnabled: true,
+    voiceLang: 'both',
+    voiceCooldownSec: 25,
+    audioVolume: 0.18,
+    filterMode: 'off',
+    highpassHz: 150,
+    lowpassHz: 4000
   };
 
-  const SPEECH_TEXT = 'リフレッシュコーナーをご利用の方へ。勉強している子の迷惑になります。小声で話してください。';
-
-  // Web Speech APIで指定できる音量の最大値は 1.0 です。
-  // iPad本体の音量も最大にして使ってください。
-  const SPEECH_VOLUME_MAX = 1.0;
-  const SPEECH_RATE = 0.85;
-  const SPEECH_PITCH = 1.0;
-
-  // 録音音声ファイル方式
-  // GitHub Pagesでは、index.html と同じ階層に warning.mp3 を置いてください。
-  const RECORDED_WARNING_AUDIO_URL = 'warning.mp3';
-  let recordedWarningBuffer = null;
-  let recordedWarningAudioReady = false;
-  let recordedWarningAudioLoading = false;
-
-  // 赤になった後にすぐ白へ戻らないようにするための解除条件
-  const CLEAR_MARGIN_DB = 2.0; // noisyDb - 2dB を下回ったら静か判定候補
-  const CLEAR_SEC = 3;         // 3秒連続で静かなら解除
+  // 自販機ノイズの計測が終わるまでは必ず false のままにする．
+  // 将来フィルターを有効化する時だけ true に変更し，connectAudioGraph() の分岐を使う．
+  const FILTER_ENGINE_ENABLED = false;
 
   let ctx = null;
   let analyser = null;
   let stream = null;
   let raf = null;
+  let sourceNode = null;
+  let highpassNode = null;
+  let lowpassNode = null;
 
   let winSumSq = 0;
   let winN = 0;
@@ -308,308 +446,12 @@
   const TAU_SLOW = 1.0;
   const EPS = 1e-18;
 
-  let noisyCount = 0;
-  let quietCount = 0;
-  let noisyActive = false;
-
-  let speechPrimed = false;
-  let lastSpeechAt = 0;
-
-  // ===== 読み上げ前アラート音の旧サンプル（参考用・無効） =====
-  // 下に、今回採用した playPreAlertBeep() を有効な関数として追加しています。
-  //
-  // function playPreAlertBeep(){
-  //   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  //   if (!AudioContextClass) return;
-  //
-  //   const audioCtx = ctx || new AudioContextClass();
-  //   try { audioCtx.resume?.(); } catch(_) {}
-  //
-  //   const osc = audioCtx.createOscillator();
-  //   const gain = audioCtx.createGain();
-  //
-  //   // Web Audioのゲインは大きくしすぎると音割れするため、まずは0.7程度にしています。
-  //   // さらに強くしたい場合は 0.9〜1.0 まで上げてください。
-  //   gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-  //   gain.gain.exponentialRampToValueAtTime(0.7, audioCtx.currentTime + 0.02);
-  //   gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.18);
-  //
-  //   osc.type = 'square';
-  //   osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-  //   osc.connect(gain);
-  //   gain.connect(audioCtx.destination);
-  //
-  //   osc.start(audioCtx.currentTime);
-  //   osc.stop(audioCtx.currentTime + 0.2);
-  //
-  //   setTimeout(() => {
-  //     try { osc.disconnect(); } catch(_) {}
-  //     try { gain.disconnect(); } catch(_) {}
-  //     if (!ctx) { try { audioCtx.close(); } catch(_) {} }
-  //   }, 300);
-  // }
-
-  function playPreAlertBeep(){
-    if (!ctx) return 0;
-
-    const audioCtx = ctx;
-    const duration = 2.0;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    const t = audioCtx.currentTime;
-    gain.gain.setValueAtTime(0.0001, t);
-
-    // pattern: pulse
-    const pulseOn = 0.22;
-    const pulseOff = 0.15;
-    const cycle = pulseOn + pulseOff;
-
-    for (let startOffset = 0; startOffset < duration; startOffset += cycle){
-      const start = t + startOffset;
-      const end = Math.min(t + duration, start + pulseOn);
-
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(getAlertGain(), start + 0.025);
-      gain.gain.setValueAtTime(getAlertGain(), Math.max(start + 0.03, end - 0.03));
-      gain.gain.exponentialRampToValueAtTime(0.0001, end);
-    }
-
-    osc.start(t);
-    osc.stop(t + duration + 0.02);
-
-    setTimeout(() => {
-      try { osc.disconnect(); } catch(_) {}
-      try { gain.disconnect(); } catch(_) {}
-    }, (duration + 0.3) * 1000);
-
-    // 読み上げをアラート音の後に始めるため、秒数を返す
-    return duration;
-  }
-
-  // ===== ブザー機能（必要になったらコメントアウト解除） =====
-  // let alarmOsc = null;
-  // let alarmGain = null;
-  // function startAlarmSound(){
-  //   if (!ctx || alarmOsc) return;
-  //   alarmGain = ctx.createGain();
-  //   alarmGain.gain.setValueAtTime(0.0, ctx.currentTime);
-  //   alarmGain.connect(ctx.destination);
-  //   alarmOsc = ctx.createOscillator();
-  //   alarmOsc.type = 'square';
-  //   alarmOsc.frequency.setValueAtTime(880, ctx.currentTime);
-  //   alarmOsc.connect(alarmGain);
-  //   alarmOsc.start();
-  //   alarmGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.05);
-  // }
-  // function stopAlarmSound(){
-  //   if (alarmGain && ctx){
-  //     try {
-  //       alarmGain.gain.cancelScheduledValues(ctx.currentTime);
-  //       alarmGain.gain.setValueAtTime(alarmGain.gain.value, ctx.currentTime);
-  //       alarmGain.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 0.05);
-  //     } catch(_) {}
-  //   }
-  //   if (alarmOsc){
-  //     const osc = alarmOsc;
-  //     alarmOsc = null;
-  //     setTimeout(() => {
-  //       try { osc.stop(); } catch(_) {}
-  //       try { osc.disconnect(); } catch(_) {}
-  //     }, 80);
-  //   }
-  //   if (alarmGain){
-  //     const gain = alarmGain;
-  //     alarmGain = null;
-  //     setTimeout(() => {
-  //       try { gain.disconnect(); } catch(_) {}
-  //     }, 100);
-  //   }
-  // }
-
-  async function loadRecordedWarningAudio(){
-    if (!ctx || recordedWarningAudioReady || recordedWarningAudioLoading) return recordedWarningAudioReady;
-
-    recordedWarningAudioLoading = true;
-
-    try {
-      const res = await fetch(RECORDED_WARNING_AUDIO_URL, { cache: 'reload' });
-      if (!res.ok) throw new Error(`${RECORDED_WARNING_AUDIO_URL} が見つかりません`);
-
-      const arrayBuffer = await res.arrayBuffer();
-      recordedWarningBuffer = await ctx.decodeAudioData(arrayBuffer);
-      recordedWarningAudioReady = true;
-      console.log('recorded warning audio loaded:', RECORDED_WARNING_AUDIO_URL);
-    } catch(e) {
-      recordedWarningBuffer = null;
-      recordedWarningAudioReady = false;
-      console.warn('録音音声ファイルを読み込めませんでした。speechSynthesisへフォールバックします:', e);
-    } finally {
-      recordedWarningAudioLoading = false;
-    }
-
-    return recordedWarningAudioReady;
-  }
-
-  function getRecordedGain(){
-    const v = Number(recordedGainInput.value);
-    return Number.isFinite(v) && v > 0 ? Math.min(v, 5) : DEFAULTS.recordedGain;
-  }
-
-  function getAlertGain(){
-    const v = Number(alertGainInput.value);
-    return Number.isFinite(v) && v > 0 ? Math.min(v, 3) : DEFAULTS.alertGain;
-  }
-
-  function getRecordedRate(){
-    const v = Number(recordedRateInput.value);
-    return Number.isFinite(v) && v >= 0.5 && v <= 1.5 ? v : DEFAULTS.recordedRate;
-  }
-
-  function playRecordedWarningAudio(){
-    if (!ctx || !recordedWarningBuffer) return 0;
-
-    const source = ctx.createBufferSource();
-    const gain = ctx.createGain();
-
-    source.buffer = recordedWarningBuffer;
-    source.playbackRate.setValueAtTime(getRecordedRate(), ctx.currentTime);
-    source.connect(gain);
-    gain.connect(ctx.destination);
-
-    // 1.0 が等倍です。2.0 なら約2倍に増幅します。
-    // 上げすぎると音割れするため、まずは 1.5〜2.5 程度がおすすめです。
-    gain.gain.setValueAtTime(getRecordedGain(), ctx.currentTime);
-
-    source.start(ctx.currentTime);
-
-    setTimeout(() => {
-      try { source.disconnect(); } catch(_) {}
-      try { gain.disconnect(); } catch(_) {}
-    }, (recordedWarningBuffer.duration / getRecordedRate() + 0.3) * 1000);
-
-    return recordedWarningBuffer.duration / getRecordedRate();
-  }
-
-  function speechSupported(){
-    return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
-  }
-
-  function getJapaneseVoice(){
-    if (!speechSupported()) return null;
-    const voices = window.speechSynthesis.getVoices();
-    return voices.find(v => v.lang === 'ja-JP') ||
-           voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ja')) ||
-           null;
-  }
-
-  function createUtterance(text, volume = SPEECH_VOLUME_MAX){
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'ja-JP';
-    u.rate = SPEECH_RATE;
-    u.pitch = SPEECH_PITCH;
-    u.volume = Math.max(0, Math.min(1, volume));
-
-    const voice = getJapaneseVoice();
-    if (voice) u.voice = voice;
-
-    return u;
-  }
-
-  // iPad Safari対策：開始ボタンのタップ中に一度だけ音声APIへ触れておく
-  function primeSpeech(){
-    if (!speechSupported() || speechPrimed) return;
-    try {
-      window.speechSynthesis.cancel();
-      const u = createUtterance(' ', 0.0);
-      window.speechSynthesis.speak(u);
-      speechPrimed = true;
-    } catch(e) {
-      console.warn('speech prime failed:', e);
-    }
-  }
-
-  function stopSpeech(){
-    if (!speechSupported()) return;
-    try { window.speechSynthesis.cancel(); } catch(_) {}
-  }
-
-  async function prepareAudioForTest(){
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass){
-      alert('このブラウザは音声再生に対応していません。');
-      return false;
-    }
-
-    try {
-      if (!ctx){
-        ctx = new AudioContextClass();
-      }
-
-      await ctx.resume();
-
-      if (!recordedWarningAudioReady && !recordedWarningAudioLoading){
-        await loadRecordedWarningAudio();
-      }
-
-      syncSettingsSummary();
-      return true;
-    } catch(e) {
-      alert('音声テストの準備に失敗しました: ' + (e?.message || e));
-      return false;
-    }
-  }
-
-  function speakWarning(force = false){
-    if (!speechSupported()) {
-      if (force) alert('このブラウザは音声読み上げに対応していません。');
-      return;
-    }
-
-    const now = Date.now();
-    const cooldownMs = getSpeechCooldownSec() * 1000;
-    if (!force && now - lastSpeechAt < cooldownMs) return;
-
-    try {
-      window.speechSynthesis.cancel();
-
-      // 2秒のアラート音を先に鳴らし、その後に録音音声を再生します。
-      // warning.mp3 が読み込めない場合のみ、従来のブラウザ読み上げにフォールバックします。
-      const alertDurationSec = playPreAlertBeep();
-
-      const playVoice = () => {
-        const recordedDurationSec = playRecordedWarningAudio();
-
-        if (recordedDurationSec <= 0){
-          const u = createUtterance(SPEECH_TEXT, SPEECH_VOLUME_MAX);
-          u.onerror = (e) => console.warn('speech error:', e);
-          window.speechSynthesis.speak(u);
-        }
-      };
-
-      if (alertDurationSec > 0){
-        setTimeout(playVoice, (alertDurationSec + 0.15) * 1000);
-      } else {
-        playVoice();
-      }
-
-      if (!force) lastSpeechAt = now;
-    } catch(e) {
-      console.warn('speech failed:', e);
-    }
-  }
-
-  if (speechSupported()){
-    // Safariでは音声リストが遅れて入ることがあるため、変更時にも取得しておく
-    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
-    window.speechSynthesis.getVoices();
-  }
+  let currentState = 'normal';
+  let cautionCount = 0;
+  let warningCount = 0;
+  let clearCount = 0;
+  let lastVoiceAt = 0;
+  let audioPrimed = false;
 
   function isSecureOk(){
     return location.protocol === 'https:' ||
@@ -624,59 +466,102 @@
     return Number.isFinite(num) ? num : fallback;
   }
 
-  function saveSettings(){
-    localStorage.setItem(STORAGE_KEYS.noisyDb, String(getNoisyDb()));
-    localStorage.setItem(STORAGE_KEYS.triggerSec, String(getTriggerSec()));
-    localStorage.setItem(STORAGE_KEYS.speechCooldownSec, String(getSpeechCooldownSec()));
-    localStorage.setItem(STORAGE_KEYS.recordedGain, String(getRecordedGain()));
-    localStorage.setItem(STORAGE_KEYS.alertGain, String(getAlertGain()));
-    localStorage.setItem(STORAGE_KEYS.recordedRate, String(getRecordedRate()));
+  function loadBool(key, fallback){
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return raw === 'true';
+  }
+
+  function loadString(key, fallback){
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : raw;
+  }
+
+  function getSettings(){
+    return {
+      cautionDb: validNumber(cautionDbInput.value, DEFAULTS.cautionDb),
+      warningDb: validNumber(warningDbInput.value, DEFAULTS.warningDb),
+      cautionSec: validInt(cautionSecInput.value, DEFAULTS.cautionSec, 1),
+      warningSec: validInt(warningSecInput.value, DEFAULTS.warningSec, 1),
+      clearMarginDb: validNumber(clearMarginInput.value, DEFAULTS.clearMarginDb, 0),
+      clearSec: validInt(clearSecInput.value, DEFAULTS.clearSec, 1),
+      audioEnabled: audioEnabledInput.checked,
+      voiceLang: voiceLangInput.value || DEFAULTS.voiceLang,
+      voiceCooldownSec: validInt(voiceCooldownInput.value, DEFAULTS.voiceCooldownSec, 5),
+      audioVolume: clamp(validNumber(audioVolumeInput.value, DEFAULTS.audioVolume), 0, 1),
+      filterMode: filterModeInput.value || DEFAULTS.filterMode,
+      highpassHz: validNumber(highpassHzInput.value, DEFAULTS.highpassHz, 20),
+      lowpassHz: validNumber(lowpassHzInput.value, DEFAULTS.lowpassHz, 20)
+    };
+  }
+
+  function validNumber(value, fallback, min=-Infinity){
+    const n = Number(value);
+    return Number.isFinite(n) && n >= min ? n : fallback;
+  }
+
+  function validInt(value, fallback, min=1){
+    const n = Math.floor(Number(value));
+    return Number.isFinite(n) && n >= min ? n : fallback;
+  }
+
+  function clamp(x, a, b){
+    return Math.min(b, Math.max(a, x));
   }
 
   function applySettingsToInputs(){
-    noisyDbInput.value = loadNumber(STORAGE_KEYS.noisyDb, DEFAULTS.noisyDb).toFixed(1);
-    triggerSecInput.value = String(loadNumber(STORAGE_KEYS.triggerSec, DEFAULTS.triggerSec));
-    speechCooldownInput.value = String(loadNumber(STORAGE_KEYS.speechCooldownSec, DEFAULTS.speechCooldownSec));
-    recordedGainInput.value = String(loadNumber(STORAGE_KEYS.recordedGain, DEFAULTS.recordedGain));
-    alertGainInput.value = String(loadNumber(STORAGE_KEYS.alertGain, DEFAULTS.alertGain));
-    recordedRateInput.value = String(loadNumber(STORAGE_KEYS.recordedRate, DEFAULTS.recordedRate));
+    cautionDbInput.value = loadNumber(STORAGE_KEYS.cautionDb, DEFAULTS.cautionDb).toFixed(1);
+    warningDbInput.value = loadNumber(STORAGE_KEYS.warningDb, DEFAULTS.warningDb).toFixed(1);
+    cautionSecInput.value = String(loadNumber(STORAGE_KEYS.cautionSec, DEFAULTS.cautionSec));
+    warningSecInput.value = String(loadNumber(STORAGE_KEYS.warningSec, DEFAULTS.warningSec));
+    clearMarginInput.value = loadNumber(STORAGE_KEYS.clearMarginDb, DEFAULTS.clearMarginDb).toFixed(1);
+    clearSecInput.value = String(loadNumber(STORAGE_KEYS.clearSec, DEFAULTS.clearSec));
+    audioEnabledInput.checked = loadBool(STORAGE_KEYS.audioEnabled, DEFAULTS.audioEnabled);
+    voiceLangInput.value = loadString(STORAGE_KEYS.voiceLang, DEFAULTS.voiceLang);
+    voiceCooldownInput.value = String(loadNumber(STORAGE_KEYS.voiceCooldownSec, DEFAULTS.voiceCooldownSec));
+    audioVolumeInput.value = loadNumber(STORAGE_KEYS.audioVolume, DEFAULTS.audioVolume).toFixed(2);
+    filterModeInput.value = loadString(STORAGE_KEYS.filterMode, DEFAULTS.filterMode);
+    highpassHzInput.value = String(loadNumber(STORAGE_KEYS.highpassHz, DEFAULTS.highpassHz));
+    lowpassHzInput.value = String(loadNumber(STORAGE_KEYS.lowpassHz, DEFAULTS.lowpassHz));
   }
 
-  function getNoisyDb(){
-    const v = Number(noisyDbInput.value);
-    return Number.isFinite(v) ? v : DEFAULTS.noisyDb;
+  function saveSettings(){
+    const s = getSettings();
+    localStorage.setItem(STORAGE_KEYS.cautionDb, String(s.cautionDb));
+    localStorage.setItem(STORAGE_KEYS.warningDb, String(s.warningDb));
+    localStorage.setItem(STORAGE_KEYS.cautionSec, String(s.cautionSec));
+    localStorage.setItem(STORAGE_KEYS.warningSec, String(s.warningSec));
+    localStorage.setItem(STORAGE_KEYS.clearMarginDb, String(s.clearMarginDb));
+    localStorage.setItem(STORAGE_KEYS.clearSec, String(s.clearSec));
+    localStorage.setItem(STORAGE_KEYS.audioEnabled, String(s.audioEnabled));
+    localStorage.setItem(STORAGE_KEYS.voiceLang, s.voiceLang);
+    localStorage.setItem(STORAGE_KEYS.voiceCooldownSec, String(s.voiceCooldownSec));
+    localStorage.setItem(STORAGE_KEYS.audioVolume, String(s.audioVolume));
+    localStorage.setItem(STORAGE_KEYS.filterMode, s.filterMode);
+    localStorage.setItem(STORAGE_KEYS.highpassHz, String(s.highpassHz));
+    localStorage.setItem(STORAGE_KEYS.lowpassHz, String(s.lowpassHz));
+    updateSummary();
   }
 
-  function getTriggerSec(){
-    const v = Math.floor(Number(triggerSecInput.value));
-    return Number.isFinite(v) && v >= 1 ? v : DEFAULTS.triggerSec;
+  function updateSummary(){
+    const s = getSettings();
+    subEl.textContent = `CAUTION ${s.cautionDb.toFixed(1)} dBFS / WARNING ${s.warningDb.toFixed(1)} dBFS / SLOW表示`;
+    filterPill.textContent = FILTER_ENGINE_ENABLED ? `FILTER ${s.filterMode.toUpperCase()}` : 'FILTER STANDBY / 現在無効';
   }
 
-  function getSpeechCooldownSec(){
-    const v = Math.floor(Number(speechCooldownInput.value));
-    return Number.isFinite(v) && v >= 5 ? v : DEFAULTS.speechCooldownSec;
-  }
-
-  function syncSettingsSummary(){
-    const clearDb = getNoisyDb() - CLEAR_MARGIN_DB;
-    const audioMode = recordedWarningAudioReady
-      ? `録音音声 x${getRecordedGain().toFixed(1)} / 速度 ${getRecordedRate().toFixed(2)}x`
-      : '録音音声未読込';
-    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤 / 警告音 ${getAlertGain().toFixed(1)} / ${audioMode} / 間隔 ${getSpeechCooldownSec()}秒 / ${clearDb.toFixed(1)}未満が${CLEAR_SEC}秒続くと解除`;
-  }
-
-  function setVisualState(state, text){
-    document.body.classList.remove('state-quiet', 'state-warning', 'state-noisy');
+  function setState(state, en, ja){
+    currentState = state;
+    document.body.classList.remove('state-normal', 'state-caution', 'state-warning');
     document.body.classList.add(`state-${state}`);
-    statusEl.textContent = text;
+    statusEnEl.textContent = en;
+    statusJaEl.textContent = ja;
   }
 
   function resetJudgeState(){
-    noisyCount = 0;
-    quietCount = 0;
-    noisyActive = false;
-    setVisualState('quiet', '静か');
-    // stopAlarmSound();
+    cautionCount = 0;
+    warningCount = 0;
+    clearCount = 0;
+    setState('normal', 'NORMAL', '静か');
   }
 
   function calcPowerAndSumSq(floatData){
@@ -693,54 +578,179 @@
     return { power, sumSq, n: floatData.length };
   }
 
-  function updateJudgeState(db1s){
-    const noisyDb = getNoisyDb();
-    const triggerSec = getTriggerSec();
-    const clearDb = noisyDb - CLEAR_MARGIN_DB;
+  function connectAudioGraph(src){
+    sourceNode = src;
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
 
-    if (!noisyActive){
-      if (db1s >= noisyDb){
-        noisyCount += 1;
-      } else {
-        noisyCount = 0;
-      }
-
-      if (noisyCount >= triggerSec){
-        noisyActive = true;
-        quietCount = 0;
-        setVisualState('noisy', 'うるさい');
-        speakWarning(false);
-        // startAlarmSound();
-        return;
-      }
-
-      if (noisyCount > 0){
-        const remain = triggerSec - noisyCount;
-        setVisualState('warning', `注意まで ${remain}秒`);
-      } else {
-        setVisualState('quiet', '静か');
-      }
+    // 現在はフィルターを絶対に使わない．将来の有効化時は FILTER_ENGINE_ENABLED を true にする．
+    if (!FILTER_ENGINE_ENABLED){
+      src.connect(analyser);
       return;
     }
 
-    // うるさい状態になった後は、十分静かになるまで赤を維持
-    if (db1s < clearDb){
-      quietCount += 1;
+    const s = getSettings();
+    highpassNode = ctx.createBiquadFilter();
+    highpassNode.type = 'highpass';
+    highpassNode.frequency.setValueAtTime(s.highpassHz, ctx.currentTime);
+
+    lowpassNode = ctx.createBiquadFilter();
+    lowpassNode.type = 'lowpass';
+    lowpassNode.frequency.setValueAtTime(s.lowpassHz, ctx.currentTime);
+
+    if (s.filterMode === 'highpass'){
+      src.connect(highpassNode).connect(analyser);
+    } else if (s.filterMode === 'lowpass'){
+      src.connect(lowpassNode).connect(analyser);
+    } else if (s.filterMode === 'bandpass'){
+      src.connect(highpassNode).connect(lowpassNode).connect(analyser);
     } else {
-      quietCount = 0;
+      src.connect(analyser);
     }
+  }
 
-    if (quietCount >= CLEAR_SEC){
-      noisyActive = false;
-      noisyCount = 0;
-      quietCount = 0;
-      setVisualState('quiet', '静か');
-      // stopAlarmSound();
+  function playAviationTone(kind='warning'){
+    if (!ctx) return;
+    const s = getSettings();
+    if (!s.audioEnabled) return;
+
+    try { ctx.resume?.(); } catch(_) {}
+
+    const t0 = ctx.currentTime;
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, t0);
+    master.gain.exponentialRampToValueAtTime(Math.max(0.001, s.audioVolume), t0 + 0.03);
+    master.gain.exponentialRampToValueAtTime(0.0001, t0 + (kind === 'warning' ? 1.25 : 0.45));
+    master.connect(ctx.destination);
+
+    const freqs = kind === 'warning' ? [880, 660, 880, 660] : [660, 660];
+    const step = kind === 'warning' ? 0.28 : 0.18;
+
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = kind === 'warning' ? 'square' : 'sine';
+      osc.frequency.setValueAtTime(freq, t0 + i * step);
+      gain.gain.setValueAtTime(0.0001, t0 + i * step);
+      gain.gain.exponentialRampToValueAtTime(1.0, t0 + i * step + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + i * step + step * 0.75);
+      osc.connect(gain).connect(master);
+      osc.start(t0 + i * step);
+      osc.stop(t0 + i * step + step * 0.9);
+    });
+
+    setTimeout(() => {
+      try { master.disconnect(); } catch(_) {}
+    }, kind === 'warning' ? 1500 : 700);
+  }
+
+  function speakAlert(kind='warning'){
+    const s = getSettings();
+    if (!s.audioEnabled || !('speechSynthesis' in window)) return;
+
+    const now = Date.now();
+    if (now - lastVoiceAt < s.voiceCooldownSec * 1000) return;
+    lastVoiceAt = now;
+
+    const ja = kind === 'warning'
+      ? '警告。声量を下げてください。自習室の利用者の迷惑になります。'
+      : '注意。声量が大きくなっています。';
+    const en = kind === 'warning'
+      ? 'Warning. Please lower your voice. This is a quiet study area.'
+      : 'Caution. Noise level is increasing.';
+
+    const text = s.voiceLang === 'ja' ? ja : s.voiceLang === 'en' ? en : `${ja} ${en}`;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = s.voiceLang === 'en' ? 'en-US' : 'ja-JP';
+    utter.rate = 0.88;
+    utter.pitch = 0.95;
+    utter.volume = 1.0;
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    } catch(_) {}
+  }
+
+  function primeAudio(){
+    if (audioPrimed || !ctx) return;
+    try { ctx.resume?.(); } catch(_) {}
+    const gain = ctx.createGain();
+    const osc = ctx.createOscillator();
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    osc.frequency.setValueAtTime(440, ctx.currentTime);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.02);
+    setTimeout(() => {
+      try { gain.disconnect(); } catch(_) {}
+    }, 60);
+    audioPrimed = true;
+  }
+
+  function updateJudgeState(db1s){
+    const s = getSettings();
+    const clearDb = s.warningDb - s.clearMarginDb;
+
+    if (currentState === 'warning'){
+      if (db1s < clearDb){
+        clearCount += 1;
+      } else {
+        clearCount = 0;
+      }
+
+      if (clearCount >= s.clearSec){
+        warningCount = 0;
+        clearCount = 0;
+        if (db1s >= s.cautionDb){
+          setState('caution', 'CAUTION', '声量注意');
+        } else {
+          setState('normal', 'NORMAL', '静か');
+        }
+      } else {
+        setState('warning', 'WARNING', '注意が必要です');
+      }
       return;
     }
 
-    setVisualState('noisy', 'うるさい');
-    speakWarning(false);
+    clearCount = 0;
+
+    if (db1s >= s.warningDb){
+      warningCount += 1;
+      cautionCount += 1;
+    } else {
+      warningCount = 0;
+      if (db1s >= s.cautionDb){
+        cautionCount += 1;
+      } else {
+        cautionCount = 0;
+      }
+    }
+
+    if (warningCount >= s.warningSec){
+      setState('warning', 'WARNING', '注意が必要です');
+      playAviationTone('warning');
+      speakAlert('warning');
+      return;
+    }
+
+    if (cautionCount >= s.cautionSec){
+      setState('caution', 'CAUTION', '声量注意');
+      // 黄色では音声は鳴らしすぎない．必要なら下の2行を有効化する．
+      // playAviationTone('caution');
+      // speakAlert('caution');
+      return;
+    }
+
+    const remainingWarning = Math.max(0, s.warningSec - warningCount);
+    const remainingCaution = Math.max(0, s.cautionSec - cautionCount);
+
+    if (warningCount > 0){
+      setState('caution', 'CAUTION', `赤まで ${remainingWarning}秒`);
+    } else if (cautionCount > 0){
+      setState('caution', 'CAUTION', `黄まで ${remainingCaution}秒`);
+    } else {
+      setState('normal', 'NORMAL', '静か');
+    }
   }
 
   function startLoop(){
@@ -801,12 +811,9 @@
     btn.disabled = true;
 
     try{
-      primeSpeech();
-
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       await ctx.resume();
-      await loadRecordedWarningAudio();
-      syncSettingsSummary();
+      primeAudio();
 
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -817,9 +824,7 @@
       });
 
       const src = ctx.createMediaStreamSource(stream);
-      analyser = ctx.createAnalyser();
-      analyser.fftSize = 2048;
-      src.connect(analyser);
+      connectAudioGraph(src);
 
       resetJudgeState();
       startLoop();
@@ -846,8 +851,12 @@
     try { stream?.getTracks().forEach(t => t.stop()); } catch(_) {}
     stream = null;
 
-    resetJudgeState();
-    stopSpeech();
+    try { sourceNode?.disconnect(); } catch(_) {}
+    sourceNode = null;
+    try { highpassNode?.disconnect(); } catch(_) {}
+    highpassNode = null;
+    try { lowpassNode?.disconnect(); } catch(_) {}
+    lowpassNode = null;
 
     try { await ctx?.close(); } catch(_) {}
     ctx = null;
@@ -855,65 +864,48 @@
 
     slowPower = null;
     lastT = null;
-    lastSpeechAt = 0;
-    recordedWarningBuffer = null;
-    recordedWarningAudioReady = false;
-    recordedWarningAudioLoading = false;
+    audioPrimed = false;
 
     dbEl.textContent = '--';
-    syncSettingsSummary();
-    setVisualState('quiet', '待機中');
+    updateSummary();
+    setState('normal', 'STANDBY', '待機中');
 
     btn.textContent = '開始';
     btn.dataset.state = 'off';
     btn.disabled = false;
   }
 
-  noisyDbInput.addEventListener('input', () => {
-    saveSettings();
-    syncSettingsSummary();
-    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
+  settingsBtn.addEventListener('click', () => {
+    const open = !settingsPanel.classList.contains('open');
+    settingsPanel.classList.toggle('open', open);
+    settingsBtn.setAttribute('aria-expanded', String(open));
+    settingsBtn.textContent = open ? '閉じる' : '設定';
   });
 
-  triggerSecInput.addEventListener('input', () => {
-    saveSettings();
-    syncSettingsSummary();
-    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
-  });
-
-  speechCooldownInput.addEventListener('input', () => {
-    saveSettings();
-    syncSettingsSummary();
-    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
-  });
-
-  recordedGainInput.addEventListener('input', () => {
-    saveSettings();
-    syncSettingsSummary();
-    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
-  });
-
-  alertGainInput.addEventListener('input', () => {
-    saveSettings();
-    syncSettingsSummary();
-    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
-  });
-
-  recordedRateInput.addEventListener('input', () => {
-    saveSettings();
-    syncSettingsSummary();
-    if (btn.dataset.state !== 'on') setVisualState('quiet', '待機中');
+  [
+    cautionDbInput,
+    warningDbInput,
+    cautionSecInput,
+    warningSecInput,
+    clearMarginInput,
+    clearSecInput,
+    audioEnabledInput,
+    voiceLangInput,
+    voiceCooldownInput,
+    audioVolumeInput,
+    filterModeInput,
+    highpassHzInput,
+    lowpassHzInput
+  ].forEach(el => {
+    el.addEventListener('input', saveSettings);
+    el.addEventListener('change', saveSettings);
   });
 
   window.addEventListener('storage', (event) => {
-    if (event.key === STORAGE_KEYS.noisyDb ||
-        event.key === STORAGE_KEYS.triggerSec ||
-        event.key === STORAGE_KEYS.speechCooldownSec ||
-        event.key === STORAGE_KEYS.recordedGain ||
-        event.key === STORAGE_KEYS.alertGain ||
-        event.key === STORAGE_KEYS.recordedRate){
+    if (Object.values(STORAGE_KEYS).includes(event.key)){
       applySettingsToInputs();
-      syncSettingsSummary();
+      updateSummary();
+      if (btn.dataset.state !== 'on') setState('normal', 'STANDBY', '待機中');
     }
   });
 
@@ -922,22 +914,19 @@
     else await start();
   });
 
-  testSpeechBtn.addEventListener('click', async () => {
-    primeSpeech();
-
-    const ok = await prepareAudioForTest();
-    if (!ok) return;
-
-    // 現在画面に入っているパラメータを保存してからテスト再生します。
-    // 警告音の音量，録音音声の増幅倍率，再生速度もここで反映されます。
-    saveSettings();
-    syncSettingsSummary();
-    speakWarning(true);
+  testAudioBtn.addEventListener('click', () => {
+    if (!ctx){
+      alert('先に「開始」を押してください');
+      return;
+    }
+    primeAudio();
+    playAviationTone('warning');
+    speakAlert('warning');
   });
 
   applySettingsToInputs();
-  syncSettingsSummary();
-  setVisualState('quiet', '待機中');
+  updateSummary();
+  setState('normal', 'STANDBY', '待機中');
 </script>
 </body>
 </html>
