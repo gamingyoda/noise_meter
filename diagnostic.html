@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Noise Diagnostic</title>
+  <style>
+    :root{
+      --bg:#f6f7f9;
+      --fg:#111;
+      --muted:#666;
+      --panel:rgba(255,255,255,.90);
+      --border:rgba(0,0,0,.10);
+      --button:#f1f3f5;
+      --accent:#1f6feb;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+      background:var(--bg);
+      color:var(--fg);
+      padding:16px;
+    }
+    .wrap{
+      width:min(760px,100%);
+      margin:0 auto;
+      display:grid;
+      gap:14px;
+    }
+    .card{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:18px;
+    }
+    h1{font-size:20px;margin:0 0 4px;}
+    .desc{color:var(--muted);font-size:13px;line-height:1.6;margin:0;}
+    #db{
+      font-size:72px;
+      font-weight:800;
+      line-height:1;
+      letter-spacing:-.03em;
+      font-variant-numeric:tabular-nums;
+      text-align:center;
+    }
+    #status{
+      margin-top:8px;
+      text-align:center;
+      font-size:18px;
+      font-weight:700;
+    }
+    .grid{display:grid;gap:10px;}
+    .row{
+      display:grid;
+      grid-template-columns:1fr auto;
+      gap:10px;
+      align-items:center;
+    }
+    label{font-size:14px;color:var(--muted);}
+    input,select,textarea{
+      font:inherit;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#fff;
+      color:#111;
+    }
+    input,select{padding:10px 12px;min-width:150px;}
+    textarea{
+      width:100%;
+      min-height:260px;
+      padding:12px;
+      font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+      font-size:12px;
+      line-height:1.5;
+      resize:vertical;
+    }
+    button{
+      padding:12px 16px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:var(--button);
+      color:var(--fg);
+      font-weight:700;
+      font-size:16px;
+    }
+    button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+    button:disabled{opacity:.55;}
+    .buttons{display:flex;gap:10px;flex-wrap:wrap;}
+    .meter{
+      display:grid;
+      gap:8px;
+      margin-top:10px;
+    }
+    .band{
+      display:grid;
+      grid-template-columns:86px 1fr 62px;
+      gap:8px;
+      align-items:center;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .barbox{
+      height:12px;
+      background:#e9ecef;
+      border-radius:999px;
+      overflow:hidden;
+    }
+    .bar{
+      height:100%;
+      width:0%;
+      background:#555;
+      border-radius:999px;
+      transition:width .15s linear;
+    }
+    .small{font-size:12px;color:var(--muted);line-height:1.6;}
+    .mono{font-variant-numeric:tabular-nums;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>自販機ノイズ診断用メーター</h1>
+      <p class="desc">
+        これは本番用ではなく，フィルター設計用の測定ページです．自販機だけが鳴っている状態，通常状態，会話あり状態をそれぞれ測って，レポートをChatGPTに貼り付けてください．
+      </p>
+    </section>
+
+    <section class="card">
+      <div id="db">--</div>
+      <div id="status">待機中</div>
+      <div class="meter" id="bands"></div>
+    </section>
+
+    <section class="card grid">
+      <div class="row">
+        <label for="sceneInput">測定シーン</label>
+        <select id="sceneInput">
+          <option>自販機だけ</option>
+          <option>静かな自習室</option>
+          <option>通常の自習室</option>
+          <option>人の会話あり</option>
+          <option>本番設置場所</option>
+          <option>その他</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="durationInput">測定時間（秒）</label>
+        <input id="durationInput" type="number" min="5" step="5" value="30">
+      </div>
+      <div class="row">
+        <label for="memoInput">メモ</label>
+        <input id="memoInput" type="text" placeholder="例：iPadを自販機の上，正面向き">
+      </div>
+      <div class="buttons">
+        <button id="startBtn" class="primary">測定開始</button>
+        <button id="stopBtn" disabled>停止</button>
+        <button id="copyBtn" disabled>結果をコピー</button>
+      </div>
+      <div class="small">
+        推奨：まず「自販機だけ」を30〜60秒，次に「静かな自習室」，最後に「人の会話あり」を同じ置き方で測ってください．
+      </div>
+    </section>
+
+    <section class="card">
+      <h1>コピペ用レポート</h1>
+      <p class="desc">測定後，この欄をそのままChatGPTに貼り付けてください．</p>
+      <textarea id="report" readonly placeholder="測定後に結果がここに出ます"></textarea>
+    </section>
+  </div>
+
+<script>
+  const dbEl = document.getElementById('db');
+  const statusEl = document.getElementById('status');
+  const bandsEl = document.getElementById('bands');
+  const sceneInput = document.getElementById('sceneInput');
+  const durationInput = document.getElementById('durationInput');
+  const memoInput = document.getElementById('memoInput');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const reportEl = document.getElementById('report');
+
+  const EPS = 1e-18;
+  const TAU_SLOW = 1.0;
+
+  const BANDS = [
+    {name:'20-80',    lo:20,   hi:80},
+    {name:'80-200',   lo:80,   hi:200},
+    {name:'200-500',  lo:200,  hi:500},
+    {name:'500-1k',   lo:500,  hi:1000},
+    {name:'1k-2k',    lo:1000, hi:2000},
+    {name:'2k-4k',    lo:2000, hi:4000},
+    {name:'4k-8k',    lo:4000, hi:8000}
+  ];
+
+  const FILTER_CANDIDATES = [
+    {name:'full_20_8000', lo:20, hi:8000},
+    {name:'hp_80', lo:80, hi:8000},
+    {name:'hp_150', lo:150, hi:8000},
+    {name:'hp_250', lo:250, hi:8000},
+    {name:'hp_300', lo:300, hi:8000},
+    {name:'lp_4000', lo:20, hi:4000},
+    {name:'bp_150_4000', lo:150, hi:4000},
+    {name:'bp_300_4000', lo:300, hi:4000}
+  ];
+
+  let ctx = null;
+  let analyser = null;
+  let stream = null;
+  let raf = null;
+  let sampleTimer = null;
+  let timeBuf = null;
+  let freqBuf = null;
+  let slowPower = null;
+  let lastT = null;
+  let startedAt = null;
+  let targetSec = 30;
+
+  let overallStats = null;
+  let bandStats = null;
+  let filterStats = null;
+  let currentBandDb = new Map();
+
+  function isSecureOk(){
+    return location.protocol === 'https:' ||
+           location.hostname === 'localhost' ||
+           location.hostname === '127.0.0.1';
+  }
+
+  function powerToDb(p){
+    return 10 * Math.log10(Math.max(p, EPS));
+  }
+
+  function dbToPower(db){
+    return Math.pow(10, db / 10);
+  }
+
+  function createStats(){
+    return {powerSum:0, count:0, maxDb:-Infinity, minDb:Infinity};
+  }
+
+  function addDbStat(stat, db){
+    if (!Number.isFinite(db)) return;
+    stat.powerSum += dbToPower(db);
+    stat.count += 1;
+    stat.maxDb = Math.max(stat.maxDb, db);
+    stat.minDb = Math.min(stat.minDb, db);
+  }
+
+  function meanDb(stat){
+    if (!stat || stat.count === 0) return NaN;
+    return powerToDb(stat.powerSum / stat.count);
+  }
+
+  function resetStats(){
+    overallStats = createStats();
+    bandStats = new Map(BANDS.map(b => [b.name, createStats()]));
+    filterStats = new Map(FILTER_CANDIDATES.map(f => [f.name, createStats()]));
+    currentBandDb = new Map();
+  }
+
+  function initBandUI(){
+    bandsEl.innerHTML = '';
+    for (const b of BANDS){
+      const row = document.createElement('div');
+      row.className = 'band';
+      row.innerHTML = `
+        <div>${b.name}Hz</div>
+        <div class="barbox"><div class="bar" id="bar-${b.name}"></div></div>
+        <div class="mono" id="val-${b.name}">--</div>
+      `;
+      bandsEl.appendChild(row);
+    }
+  }
+
+  function calcTimePower(floatData){
+    let mean = 0;
+    for (let i=0;i<floatData.length;i++) mean += floatData[i];
+    mean /= floatData.length;
+
+    let sumSq = 0;
+    for (let i=0;i<floatData.length;i++){
+      const v = floatData[i] - mean;
+      sumSq += v * v;
+    }
+    return sumSq / floatData.length;
+  }
+
+  function avgFreqBandDb(freqData, lo, hi){
+    const nyquist = ctx.sampleRate / 2;
+    const binHz = nyquist / freqData.length;
+    const start = Math.max(0, Math.floor(lo / binHz));
+    const end = Math.min(freqData.length - 1, Math.ceil(hi / binHz));
+
+    let powerSum = 0;
+    let n = 0;
+    for (let i=start;i<=end;i++){
+      const db = freqData[i];
+      if (Number.isFinite(db)){
+        powerSum += dbToPower(db);
+        n += 1;
+      }
+    }
+    if (n === 0) return NaN;
+    return powerToDb(powerSum / n);
+  }
+
+  function updateBandUI(){
+    for (const b of BANDS){
+      const db = currentBandDb.get(b.name);
+      const val = document.getElementById(`val-${b.name}`);
+      const bar = document.getElementById(`bar-${b.name}`);
+      if (!Number.isFinite(db)){
+        val.textContent = '--';
+        bar.style.width = '0%';
+        continue;
+      }
+      val.textContent = db.toFixed(1);
+      const pct = Math.max(0, Math.min(100, ((db + 100) / 70) * 100)); // -100〜-30 dBFS目安
+      bar.style.width = pct.toFixed(1) + '%';
+    }
+  }
+
+  function loop(t){
+    if (!lastT) lastT = t;
+    const dt = Math.max(0, (t - lastT) / 1000);
+    lastT = t;
+
+    analyser.getFloatTimeDomainData(timeBuf);
+    const p = calcTimePower(timeBuf);
+
+    if (slowPower === null) slowPower = p;
+    const alpha = 1 - Math.exp(-dt / TAU_SLOW);
+    slowPower = (1 - alpha) * slowPower + alpha * p;
+
+    const dbSlow = powerToDb(slowPower);
+    dbEl.textContent = dbSlow.toFixed(1);
+
+    analyser.getFloatFrequencyData(freqBuf);
+    for (const b of BANDS){
+      const db = avgFreqBandDb(freqBuf, b.lo, b.hi);
+      currentBandDb.set(b.name, db);
+    }
+    updateBandUI();
+
+    raf = requestAnimationFrame(loop);
+  }
+
+  function takeOneSecondSample(){
+    analyser.getFloatTimeDomainData(timeBuf);
+    analyser.getFloatFrequencyData(freqBuf);
+
+    const p = calcTimePower(timeBuf);
+    const dbOverall = powerToDb(p);
+    addDbStat(overallStats, dbOverall);
+
+    for (const b of BANDS){
+      const db = avgFreqBandDb(freqBuf, b.lo, b.hi);
+      addDbStat(bandStats.get(b.name), db);
+    }
+
+    for (const f of FILTER_CANDIDATES){
+      const db = avgFreqBandDb(freqBuf, f.lo, f.hi);
+      addDbStat(filterStats.get(f.name), db);
+    }
+
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const remain = Math.max(0, targetSec - elapsed);
+    statusEl.textContent = `測定中：残り ${remain} 秒`;
+
+    if (elapsed >= targetSec){
+      finishMeasurement();
+    }
+  }
+
+  function dominantBandText(){
+    const arr = BANDS.map(b => ({name:b.name, avg:meanDb(bandStats.get(b.name))}))
+      .filter(x => Number.isFinite(x.avg))
+      .sort((a,b) => b.avg - a.avg);
+    if (arr.length === 0) return '不明';
+    return `${arr[0].name}Hz (${arr[0].avg.toFixed(1)} dBFS)`;
+  }
+
+  function makeFilterHint(){
+    const low = meanDb(bandStats.get('80-200'));
+    const mid = meanDb(bandStats.get('500-1k'));
+    const speech = meanDb(filterStats.get('bp_300_4000'));
+    const full = meanDb(filterStats.get('full_20_8000'));
+    const hp250 = meanDb(filterStats.get('hp_250'));
+    const hp300 = meanDb(filterStats.get('hp_300'));
+
+    const lines = [];
+    if (Number.isFinite(low) && Number.isFinite(mid) && low >= mid + 4){
+      lines.push('低周波寄りの定常ノイズが強い可能性あり．high-pass 150〜300Hzを試す価値あり．');
+    }
+    if (Number.isFinite(full) && Number.isFinite(hp300) && hp300 <= full - 3){
+      lines.push('300Hz以下を切ると全体レベルが下がる可能性あり．ただし人の声の低い成分も少し削れる．');
+    }
+    if (Number.isFinite(speech)){
+      lines.push('人の声を拾いたい場合の候補帯域は 300〜4000Hz．自販機だけ測定時のこの値と，会話あり測定時のこの値を比較してください．');
+    }
+    if (lines.length === 0){
+      lines.push('この単独測定だけでは最適フィルターは未確定．自販機だけ・静かな状態・会話ありを同じ条件で測って比較してください．');
+    }
+    return lines.join('\n');
+  }
+
+  function buildReport(){
+    const now = new Date();
+    const lines = [];
+    lines.push('Noise Diagnostic Report');
+    lines.push('---');
+    lines.push(`created_at: ${now.toISOString()}`);
+    lines.push(`scene: ${sceneInput.value}`);
+    lines.push(`memo: ${memoInput.value || '(none)'}`);
+    lines.push(`duration_sec: ${targetSec}`);
+    lines.push(`sample_rate_hz: ${ctx ? ctx.sampleRate : '(unknown)'}`);
+    lines.push(`analyser_fft_size: ${analyser ? analyser.fftSize : '(unknown)'}`);
+    lines.push(`user_agent: ${navigator.userAgent}`);
+    lines.push('');
+
+    lines.push('overall_dbfs');
+    lines.push(`  avg_leq_like: ${meanDb(overallStats).toFixed(2)}`);
+    lines.push(`  max: ${overallStats.maxDb.toFixed(2)}`);
+    lines.push(`  min: ${overallStats.minDb.toFixed(2)}`);
+    lines.push('');
+
+    lines.push('band_levels_dbfs_avg_max_min');
+    for (const b of BANDS){
+      const s = bandStats.get(b.name);
+      lines.push(`  ${b.name}Hz: avg=${meanDb(s).toFixed(2)}, max=${s.maxDb.toFixed(2)}, min=${s.minDb.toFixed(2)}`);
+    }
+    lines.push('');
+
+    lines.push('filter_candidate_levels_dbfs_avg');
+    for (const f of FILTER_CANDIDATES){
+      const s = filterStats.get(f.name);
+      lines.push(`  ${f.name}: ${meanDb(s).toFixed(2)}`);
+    }
+    lines.push('');
+
+    lines.push(`dominant_band: ${dominantBandText()}`);
+    lines.push('');
+    lines.push('auto_hint');
+    lines.push(makeFilterHint());
+    lines.push('');
+    lines.push('request_to_chatgpt');
+    lines.push('この結果から，自販機ノイズを避けて人の会話やうるささに反応しやすくするためのハイパス/ローパス/バンドパス設定を提案してください．必要なら本番index.htmlのコード修正案も作ってください．');
+    return lines.join('\n');
+  }
+
+  async function startMeasurement(){
+    if (!isSecureOk()){
+      alert('HTTPSで開く必要があります．GitHub Pages上で開いてください．');
+      return;
+    }
+
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    copyBtn.disabled = true;
+    reportEl.value = '';
+    statusEl.textContent = 'マイク許可を待っています';
+
+    try{
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      await ctx.resume();
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio:{
+          echoCancellation:false,
+          noiseSuppression:false,
+          autoGainControl:false
+        }
+      });
+
+      const src = ctx.createMediaStreamSource(stream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 4096;
+      analyser.smoothingTimeConstant = 0.2;
+      src.connect(analyser);
+
+      timeBuf = new Float32Array(analyser.fftSize);
+      freqBuf = new Float32Array(analyser.frequencyBinCount);
+      slowPower = null;
+      lastT = null;
+      resetStats();
+
+      targetSec = Math.max(5, Math.floor(Number(durationInput.value) || 30));
+      durationInput.value = String(targetSec);
+      startedAt = Date.now();
+      statusEl.textContent = `測定中：残り ${targetSec} 秒`;
+
+      raf = requestAnimationFrame(loop);
+      sampleTimer = setInterval(takeOneSecondSample, 1000);
+    }catch(e){
+      alert('エラー: ' + (e && e.message ? e.message : e));
+      await stopMeasurement(false);
+    }
+  }
+
+  async function stopMeasurement(makeReport=true){
+    if (raf) cancelAnimationFrame(raf);
+    raf = null;
+    if (sampleTimer) clearInterval(sampleTimer);
+    sampleTimer = null;
+
+    try { stream?.getTracks().forEach(t => t.stop()); } catch(_) {}
+    stream = null;
+
+    try { await ctx?.close(); } catch(_) {}
+    ctx = null;
+    analyser = null;
+    timeBuf = null;
+    freqBuf = null;
+    slowPower = null;
+    lastT = null;
+
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+
+    if (!makeReport){
+      statusEl.textContent = '停止しました';
+    }
+  }
+
+  async function finishMeasurement(){
+    const report = buildReport();
+    reportEl.value = report;
+    statusEl.textContent = '測定完了';
+    copyBtn.disabled = false;
+    await stopMeasurement(true);
+  }
+
+  copyBtn.addEventListener('click', async () => {
+    const text = reportEl.value;
+    if (!text) return;
+    try{
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = 'コピー済み';
+      setTimeout(() => copyBtn.textContent = '結果をコピー', 1200);
+    }catch(_){
+      reportEl.select();
+      document.execCommand('copy');
+    }
+  });
+
+  startBtn.addEventListener('click', startMeasurement);
+  stopBtn.addEventListener('click', () => stopMeasurement(false));
+
+  initBandUI();
+</script>
+</body>
+</html>
