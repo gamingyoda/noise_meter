@@ -354,16 +354,16 @@
 
     const audioCtx = ctx;
     const startTime = audioCtx.currentTime + 0.02;
-    const totalDuration = 1.15;
+    const totalDuration = 1.725;
 
     // 航空機の注意喚起音をイメージした，高音・低音の交互パルス。
-    // 矩形波ほど刺激的にせず，三角波と弱い倍音で明瞭さを確保する。
+    // 音の間隔と各パルスを従来の1.5倍に伸ばし，音程と音量は維持する。
     const peakGain = Math.min(0.38, Math.max(0.04, getAlertGain() * 0.14));
     const tones = [
-      { frequency: 960, offset: 0.00, duration: 0.19 },
-      { frequency: 720, offset: 0.25, duration: 0.19 },
-      { frequency: 960, offset: 0.50, duration: 0.19 },
-      { frequency: 720, offset: 0.75, duration: 0.28 }
+      { frequency: 960, offset: 0.000, duration: 0.285 },
+      { frequency: 720, offset: 0.375, duration: 0.285 },
+      { frequency: 960, offset: 0.750, duration: 0.285 },
+      { frequency: 720, offset: 1.125, duration: 0.420 }
     ];
     const nodes = [];
 
@@ -388,14 +388,14 @@
         );
 
         gain.gain.setValueAtTime(0.0001, toneStart);
-        gain.gain.exponentialRampToValueAtTime(level, toneStart + 0.012);
-        gain.gain.setValueAtTime(level, Math.max(toneStart + 0.02, toneEnd - 0.035));
+        gain.gain.exponentialRampToValueAtTime(level, toneStart + 0.018);
+        gain.gain.setValueAtTime(level, Math.max(toneStart + 0.030, toneEnd - 0.0525));
         gain.gain.exponentialRampToValueAtTime(0.0001, toneEnd);
 
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start(toneStart);
-        osc.stop(toneEnd + 0.03);
+        osc.stop(toneEnd + 0.045);
         nodes.push({ osc, gain });
       }
     }
@@ -407,7 +407,7 @@
       }
     }, (totalDuration + 0.35) * 1000);
 
-    // 読み上げ開始までの待ち時間は，従来どおり1.15秒のまま維持する。
+    // 警告音と読み上げ開始までの待ち時間を，従来の1.5倍にする。
     return totalDuration;
   }
 
