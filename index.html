@@ -6,12 +6,12 @@
   <title>Noise Meter</title>
   <style>
     :root{
-      --bg: #f6f7f9;
-      --fg: #111;
-      --muted: #666;
-      --panel: rgba(255,255,255,0.86);
-      --border: rgba(0,0,0,0.08);
-      --button: #f1f3f5;
+      --bg: #0067c0;
+      --fg: #fff;
+      --muted: #eaf4ff;
+      --panel: rgba(0,50,105,0.72);
+      --border: rgba(255,255,255,0.42);
+      --button: rgba(255,255,255,0.20);
     }
 
     *{ box-sizing:border-box; }
@@ -30,30 +30,30 @@
     }
 
     body.state-quiet{
-      --bg:#f6f7f9;
-      --fg:#111;
-      --muted:#666;
-      --panel:rgba(255,255,255,0.88);
-      --border:rgba(0,0,0,0.08);
-      --button:#f1f3f5;
+      --bg:#0067c0;
+      --fg:#fff;
+      --muted:#eaf4ff;
+      --panel:rgba(0,50,105,0.72);
+      --border:rgba(255,255,255,0.42);
+      --button:rgba(255,255,255,0.20);
     }
 
     body.state-warning{
-      --bg:#fff3cd;
-      --fg:#5c4500;
-      --muted:#856404;
-      --panel:rgba(255,255,255,0.84);
-      --border:rgba(133,100,4,0.18);
-      --button:#fff8e1;
+      --bg:#ffd400;
+      --fg:#111;
+      --muted:#3b3100;
+      --panel:rgba(255,255,255,0.38);
+      --border:rgba(0,0,0,0.24);
+      --button:rgba(255,255,255,0.48);
     }
 
     body.state-noisy{
-      --bg:#f8d7da;
-      --fg:#6a1118;
-      --muted:#842029;
-      --panel:rgba(255,255,255,0.84);
-      --border:rgba(132,32,41,0.18);
-      --button:#fcebec;
+      --bg:#e60012;
+      --fg:#fff;
+      --muted:#ffe7ea;
+      --panel:rgba(120,0,10,0.68);
+      --border:rgba(255,255,255,0.42);
+      --button:rgba(255,255,255,0.20);
     }
 
     .box{
@@ -235,7 +235,7 @@
 
     <div class="note">
       ・設定はこのブラウザに保存され、新しいタブでも引き継がれます。<br>
-      ・色の意味：白＝静か、黄＝注意、赤＝うるさい。<br>
+      ・色の意味：青＝静か、黄＝注意、赤＝うるさい。<br>
       ・赤になったら2秒のアラート音を鳴らしてから、warning.mp3を増幅して再生します。<br>
       ・警告音の音量、録音音声の増幅倍率、録音音声の再生速度は「詳細設定」から調整できます。<br>
       ・warning.mp3 がない場合は、従来のブラウザ読み上げに自動で切り替わります。<br>
