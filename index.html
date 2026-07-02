@@ -275,6 +275,12 @@
     recordedRate: 1.0
   };
 
+  // 既存の保存値はそのまま使い，iPadで聞こえやすいよう最終出力だけ上げる。
+  const IPAD_OUTPUT_BOOST = {
+    recordedGain: 2.0,
+    alertGain: 2.0
+  };
+
   const SPEECH_TEXT = 'リフレッシュコーナーをご利用の方へ。勉強している子の迷惑になります。小声で話してください。';
 
   // Web Speech APIで指定できる音量の最大値は 1.0 です。
@@ -358,7 +364,7 @@
 
     // 航空機の注意喚起音をイメージした，高音・低音の交互パルス。
     // パルス幅と高低音の間隔は元のままにし，パルス数を4回から6回へ増やす。
-    const peakGain = getAlertGain() * 0.14;
+    const peakGain = getAlertGain() * IPAD_OUTPUT_BOOST.alertGain * 0.14;
     const tones = [
       { frequency: 960, offset: 0.00, duration: 0.19 },
       { frequency: 720, offset: 0.25, duration: 0.19 },
@@ -503,9 +509,8 @@
     source.connect(gain);
     gain.connect(ctx.destination);
 
-    // 1.0 が等倍です。2.0 なら約2倍に増幅します。
-    // 上げすぎると音割れするため、まずは 1.5〜2.5 程度がおすすめです。
-    gain.gain.setValueAtTime(getRecordedGain(), ctx.currentTime);
+    // 保存されている増幅倍率は維持し，iPad向けに最終出力だけさらに上げる。
+    gain.gain.setValueAtTime(getRecordedGain() * IPAD_OUTPUT_BOOST.recordedGain, ctx.currentTime);
 
     source.start(ctx.currentTime);
 
@@ -680,9 +685,9 @@
   function syncSettingsSummary(){
     const clearDb = getNoisyDb() - CLEAR_MARGIN_DB;
     const audioMode = recordedWarningAudioReady
-      ? `録音音声 x${getRecordedGain().toFixed(1)} / 速度 ${getRecordedRate().toFixed(2)}x`
+      ? `録音音声 x${getRecordedGain().toFixed(1)} ×${IPAD_OUTPUT_BOOST.recordedGain.toFixed(1)} / 速度 ${getRecordedRate().toFixed(2)}x`
       : '録音音声未読込';
-    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤 / 警告音 ${getAlertGain().toFixed(1)} / ${audioMode} / 間隔 ${getSpeechCooldownSec()}秒 / ${clearDb.toFixed(1)}未満が${CLEAR_SEC}秒続くと解除`;
+    subEl.textContent = `dBFS（SLOW表示） / しきい値 ${getNoisyDb().toFixed(1)} dBFS / ${getTriggerSec()}秒連続で赤 / 警告音 ${getAlertGain().toFixed(1)}×${IPAD_OUTPUT_BOOST.alertGain.toFixed(1)} / ${audioMode} / 間隔 ${getSpeechCooldownSec()}秒 / ${clearDb.toFixed(1)}未満が${CLEAR_SEC}秒続くと解除`;
   }
 
   function setVisualState(state, text){
